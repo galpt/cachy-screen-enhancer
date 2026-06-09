@@ -35,7 +35,7 @@ MAX_LUMINANCE = 480
 LUMINANCE_STEP = 10
 
 
-def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0):
+def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, edid_path=None):
     """Build a single ICC profile and write it to disk.
 
     Returns the path of the written file.
@@ -47,13 +47,27 @@ def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0):
     else:
         vcgt_func = build_vcgt_generic
 
-    lut = vcgt_func(white_level=white_level, gamma=gamma, black_level=black_level)
+    # Determine native gamma for VCGT computation (from EDID if available)
+    native_gamma = 2.2
+    edid_data = None
+    if edid_path:
+        try:
+            with open(edid_path, "rb") as f:
+                edid_data = edid_summary(f.read())
+            native_gamma = edid_data.get("gamma", 2.2)
+        except Exception:
+            pass
+
+    lut = vcgt_func(
+        white_level=white_level, gamma=gamma,
+        black_level=black_level, native_gamma=native_gamma,
+    )
     icc_data = build_icc_profile(
         desc_text=f"cse_{white_level}nits_{gpu_method}",
         vcgt_lut=lut,
         white_level=white_level,
         gamma=gamma,
-        black_level=black_level,
+        edid_data=edid_data,
     )
 
     output_path = Path(output_path)
@@ -85,7 +99,7 @@ def build_cal(white_level, gamma, gpu_method, output_path, black_level=0.0):
     return str(output_path)
 
 
-def generate_all(output_dir, gpu_method, gamma, black_level, cal_only):
+def generate_all(output_dir, gpu_method, gamma, black_level, cal_only, edid_path=None):
     """Generate profiles for all standard luminance levels."""
     output_dir = Path(output_dir)
     results = []
@@ -99,7 +113,7 @@ def generate_all(output_dir, gpu_method, gamma, black_level, cal_only):
         else:
             out_name = f"cse_{wl}nits_{method}.icc"
             out_path = output_dir / out_name
-            path = build_profile(wl, gamma, method, out_path, black_level)
+            path = build_profile(wl, gamma, method, out_path, black_level, edid_path=edid_path)
         results.append(path)
         print(f"  ✓ {path}")
 
@@ -239,9 +253,7 @@ def main():
     if args.all:
         print(f"Generating {len(ALL_LUMINANCE_LEVELS)} profiles (method: {gpu_method}, gamma: {args.gamma})")
         print(f"Output directory: {output_dir.resolve()}")
-        generate_all(output_dir, gpu_method, args.gamma, args.black_level, args.cal_only)
-        print("Done.")
-        return
+        generate_all(output_dir, gpu_method, args.gamma, args.black_level, args.cal_only, edid_path=args.edid)
 
     # --- SINGLE PROFILE MODE ---
     if args.white_level is None:
@@ -267,7 +279,7 @@ def main():
         path = build_cal(wl, args.gamma, gpu_method, out_path, args.black_level)
         print(f"  ✓ {path}")
     else:
-        path = build_profile(wl, args.gamma, gpu_method, out_path, args.black_level)
+        path = build_profile(wl, args.gamma, gpu_method, out_path, args.black_level, edid_path=args.edid)
         print(f"  ✓ {path}")
 
 
