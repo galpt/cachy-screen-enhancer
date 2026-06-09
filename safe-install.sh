@@ -165,22 +165,12 @@ python3 "$SCRIPT_DIR/src/cse-gen.py" --white-level $WL --gpu-method $GPU_METHOD 
 ICC_FILE="${ICC_NO_VCGT}"
 [ ! -f "$ICC_FILE" ] && ICC_FILE="$BEST_FILE"
 
-# Copy to BOTH system and user-local colord directories (inotify
-# watches both, and the user-local path works without system-wide
-# permissions on some setups).
-COLORD_SYS="/usr/share/color/icc/colord"
-COLORD_USER="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
-sudo mkdir -p "$COLORD_SYS"
-sudo cp "$ICC_FILE" "$COLORD_SYS/$PROFILE_NAME"
-sudo chmod 644 "$COLORD_SYS/$PROFILE_NAME"  # ensure world-readable for colord user
-mkdir -p "$COLORD_USER"
-cp "$ICC_FILE" "$COLORD_USER/$PROFILE_NAME"
-
-# Trigger inotify by touching the directories and waiting for colord
-# to pick up the new file. colord automatically registers profiles
-# found in its monitored directories — no import command needed.
-sudo touch "$COLORD_SYS" 2>/dev/null || true  # system dir needs root
-touch "$COLORD_USER" 2>/dev/null || true       # user dir is writable
+    # Copy ICC profile to the user-local colord directory (no sudo needed).
+    # KWin's config (kwinoutputconfig.json) points to this path.
+    COLORD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
+    mkdir -p "$COLORD_DIR"
+    cp "$ICC_FILE" "$COLORD_DIR/$PROFILE_NAME"
+    touch "$COLORD_DIR" 2>/dev/null || true
 for i in 1 2 3 4 5; do
     PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
     [ -n "$PROFILE_ID" ] && break
@@ -214,7 +204,7 @@ for section in config:
         for output in section.get('data', []):
             if output.get('connectorName') == connector:
                 output['colorProfileSource'] = 'ICC'
-                output['iccProfilePath'] = '$COLORD_SYS/$PROFILE_NAME'
+                output['iccProfilePath'] = '$COLORD_DIR/$PROFILE_NAME'
                 changed = True
                 break
 
@@ -234,7 +224,7 @@ else
     echo "    → KWin config not found at $KWIN_CONFIG"
     echo "    → Open System Settings → Display & Monitor → Display Configuration"
     echo "    → Click your monitor → Color profile"
-    echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
+    echo "    → Select \"ICC profile\" and browse to: $COLORD_DIR/$PROFILE_NAME"
 fi
 
 # Also register profile if it wasn't already (inotify may not have caught it)

@@ -93,15 +93,12 @@ if command -v dispwin &>/dev/null; then
     dispwin -d "$DISP_IDX" -c 2>&1 || true
 fi
 
-# Step 4: Delete files from system + user colord directories
-echo "    → Removing files from colord directories..."
-for dir in "/usr/share/color/icc/colord" "${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"; do
-    if [ -d "$dir" ]; then
-        find "$dir" -name 'cse_*.icc' -o -name 'cse_*.cal' 2>/dev/null | while read -r f; do
-            echo "      Deleted: $(basename "$f") (from $dir)"
-            rm -f "$f" 2>/dev/null || sudo rm -f "$f" 2>/dev/null || true
-        done
-    fi
+# Step 4: Delete files from user colord directory
+COLORD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
+echo "    → Removing files from $COLORD_DIR..."
+find "$COLORD_DIR" -name 'cse_*.icc' -o -name 'cse_*.cal' 2>/dev/null | while read -r f; do
+    echo "      Deleted: $(basename "$f")"
+    rm -f "$f" 2>/dev/null || true
 done
 
 # Step 5: Clean up generated files in output/

@@ -40,16 +40,11 @@ fi
 PROFILE_NAME="$(basename "$PROFILE")"
 echo "[*] Installing: $PROFILE_NAME"
 
-# Copy to system + user-local colord directories, trigger inotify
-COLORD_SYS="/usr/share/color/icc/colord"
-COLORD_USER="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
-sudo mkdir -p "$COLORD_SYS"
-sudo cp "$PROFILE" "$COLORD_SYS/$PROFILE_NAME"
-sudo chmod 644 "$COLORD_SYS/$PROFILE_NAME"
-mkdir -p "$COLORD_USER"
-cp "$PROFILE" "$COLORD_USER/$PROFILE_NAME"
-sudo touch "$COLORD_SYS" 2>/dev/null || true
-touch "$COLORD_USER" 2>/dev/null || true
+# Copy to user-local colord directory (no sudo needed)
+COLORD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
+mkdir -p "$COLORD_DIR"
+cp "$PROFILE" "$COLORD_DIR/$PROFILE_NAME"
+touch "$COLORD_DIR" 2>/dev/null || true
 
 # Poll for up to 5 seconds for colord to auto-register (inotify)
 for i in 1 2 3 4 5; do
@@ -66,7 +61,7 @@ if [ -z "$PROFILE_ID" ]; then
 fi
 
 if [ -z "$PROFILE_ID" ]; then
-    echo "    → Copied to $COLORD_SYS/$PROFILE_NAME"
+    echo "    → Copied to $COLORD_DIR/$PROFILE_NAME"
     echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
     echo "    → Add it manually from the list"
     exit 0
