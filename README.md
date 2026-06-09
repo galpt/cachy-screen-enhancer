@@ -55,7 +55,7 @@ Here's what happens when you run it:
 4. It finds your display, reads its EDID, and detects your current brightness level
 5. It generates a custom ICC profile (with accurate TRC and white point) and a `.cal` gamma LUT
 6. It applies the gamma correction to your GPU via `dispwin` — this is what changes the blacks
-7. It copies the ICC profile to the system directory so color-aware apps can use it
+7. It registers the ICC profile with colord and opens KDE Display Settings so you can select it
 
 And then you get a nice summary like this:
 
@@ -80,9 +80,15 @@ And then you get a nice summary like this:
     → Gamma correction applied via dispwin
 
 [*] Installing ICC profile...
-    → Copied to /usr/share/color/icc/colord/cse_200nits_amd.icc
-    → Settings → Display & Monitor → Display Configuration → Color profile
-    → Select it as your color profile
+    → Registered: icc-e048bcdc248b2a0f13da5b25a5009661
+    → Opening color settings...
+
+A KDE settings window will open. If the profile appears in the
+"Color profile" dropdown, select it. Otherwise:
+
+  1. Click the dropdown → select "ICC profile"
+  2. Browse to: /usr/share/color/icc/colord/cse_200nits_amd.icc
+  3. Click OK
 
 +----------------------------------------------------+
 |  All done!                                         |
@@ -97,7 +103,7 @@ And then you get a nice summary like this:
 Selected profile: cse_200nits_amd.icc
 ```
 
-That's it. Seriously. Go look at your screen — blacks should look deeper, shadows should have more detail. If something looks off, just run this to undo everything:
+That's it. The gamma correction is already active on your display (via dispwin). For color-aware apps to use the profile, select it in the KDE settings as described above. If something looks off, undo everything:
 
 ```bash
 bash tools/remove-profile.sh
