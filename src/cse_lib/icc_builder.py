@@ -154,12 +154,12 @@ def build_icc_profile(
     tag_data.append(("cprt", cprt_bytes))
 
     # wtpt (XYZType)
-    # Store the NATIVE display white point (not D50-adapted), matching
-    # the approach used by the original win11hdr-srgb-to-gamma2.2-icm
-    # project. The original ICM stores D65 native white which works
-    # correctly on KDE/CachyOS. The chad tag still provides the
-    # chromatic adaptation matrix for CMMs that want D50.
-    wtpt_bytes = _build_xyz_type(*white_xyz)
+    # ICC spec requires D50-adapted white point. colord validates
+    # this — profiles with native D65 white are rejected even if
+    # a valid chad matrix is present. The original project's ICM
+    # stored native D65 (which Windows accepts), but we target
+    # Linux/colord which requires strict D50 compliance.
+    wtpt_bytes = _build_xyz_type(*d50_xyz)
     tag_data.append(("wtpt", wtpt_bytes))
 
     # chad (S15Fixed16ArrayType — 3x3 matrix)
