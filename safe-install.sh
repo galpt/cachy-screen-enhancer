@@ -166,7 +166,7 @@ ICC_FILE="${ICC_NO_VCGT}"
 [ ! -f "$ICC_FILE" ] && ICC_FILE="$BEST_FILE"
 
     # Copy ICC profile to the user-local colord directory (no sudo needed).
-    # KWin's config (kwinoutputconfig.json) points to this path.
+    # kscreen-doctor will point KWin's config to this path.
     COLORD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
     mkdir -p "$COLORD_DIR"
     cp "$ICC_FILE" "$COLORD_DIR/$PROFILE_NAME"

@@ -58,7 +58,7 @@ def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, 
         except Exception:
             pass
 
-    # Compute VCGT LUT (needed for xcalib/dispwin even if not embedded in ICC)
+    # Compute VCGT LUT (needed for dispwin even if not embedded in ICC)
     lut = vcgt_func(
         white_level=white_level, gamma=gamma,
         black_level=black_level, native_gamma=native_gamma,
@@ -193,7 +193,7 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--with-vcgt", action="store_true",
-        help="Embed VCGT gamma LUT in ICC profile (Windows MHC2-style). "
+        help="Embed VCGT gamma LUT in ICC profile for hardware correction"
              "By default the profile describes the display without hardware correction;",
     )
 
