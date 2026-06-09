@@ -194,49 +194,52 @@ if [ -z "$PROFILE_ID" ]; then
     PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
 fi
 
-if [ -z "$PROFILE_ID" ]; then
-    echo "    → Copied to $COLORD_SYS/$PROFILE_NAME"
-    echo "    → Copied to $COLORD_USER/$PROFILE_NAME"
-    echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
-    echo "    → Add the profile from the list"
+# Set the ICC profile directly in KWin's output configuration file.
+# KWin stores per-output settings in ~/.config/kwinoutputconfig.json,
+# including the iccProfilePath and colorProfileSource fields.
+KWIN_CONFIG="$HOME/.config/kwinoutputconfig.json"
+if [ -f "$KWIN_CONFIG" ]; then
+    python3 -c "
+import json, sys
+
+with open('$KWIN_CONFIG') as f:
+    config = json.load(f)
+
+# Find the eDP-1 output and set the ICC profile path
+changed = False
+for section in config:
+    if section.get('name') == 'outputs':
+        for output in section.get('data', []):
+            if output.get('connectorName') == '$CONNECTOR':
+                output['colorProfileSource'] = 'ICC'
+                output['iccProfilePath'] = '$COLORD_SYS/$PROFILE_NAME'
+                changed = True
+                break
+
+if changed:
+    with open('$KWIN_CONFIG', 'w') as f:
+        json.dump(config, f, indent=2)
+    print('    → Applied to KWin output config')
+else:
+    print('    → Could not find output $CONNECTOR in KWin config')
+" 2>&1
+
+    # Notify KWin to reload the config (KWin watches this file, but
+    # a D-Bus signal ensures it picks up the change immediately)
+    if command -v qdbus &>/dev/null; then
+        qdbus org.kde.KWin /KWin reloadConfig 2>/dev/null || true
+        qdbus org.kde.KWin /KWin reconfigure 2>/dev/null || true
+    fi
+    echo "    → KWin will use the new ICC profile"
 else
-    echo "    → Registered: $PROFILE_ID"
-
-    # Get or create a display device (run colormgr as user, NOT via sudo,
-    # so D-Bus PolKit auth works with the user session)
-    DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
-    if [ -z "$DEVICE_ID" ]; then
-        DEVICE_ID=$(colormgr create-device "display-$CONNECTOR" "temp" "display" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
-        sleep 1
-    fi
-
-    if [ -n "$DEVICE_ID" ]; then
-        colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
-        colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
-        echo "    → Set as default for display device"
-    fi
+    echo "    → KWin config not found at $KWIN_CONFIG"
+    echo "    → Open System Settings → Display & Monitor → Display Configuration"
+    echo "    → Click your monitor → Color profile"
+    echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
 fi
 
-# If no device was created (KWin/Wayland doesn't register with colord),
-# offer to open the KDE color settings automatically
-if [ -z "${DEVICE_ID:-}" ]; then
-    echo "    → Opening display settings..."
-    if command -v kcmshell6 &>/dev/null; then
-        kcmshell6 kcm_kscreen &>/dev/null &
-        sleep 1
-        echo "    → Display Configuration opened. Click your monitor → Color profile"
-        echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
-    elif command -v systemsettings &>/dev/null; then
-        systemsettings kcm_kscreen &>/dev/null &
-        sleep 1
-        echo "    → Display Configuration opened. Click your monitor → Color profile"
-        echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
-    else
-        echo "    → Open System Settings → Display & Monitor → Display Configuration"
-        echo "    → Click your monitor → Color profile"
-        echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
-    fi
-fi
+# Also register profile if it wasn't already (inotify may not have caught it)
+sudo systemctl restart colord 2>/dev/null || true
 
 echo ""
 echo "+----------------------------------------------------+"

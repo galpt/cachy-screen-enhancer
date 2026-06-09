@@ -80,15 +80,8 @@ And then you get a nice summary like this:
     → Gamma correction applied via dispwin
 
 [*] Installing ICC profile...
-    → Registered: icc-e048bcdc248b2a0f13da5b25a5009661
-    → Opening color settings...
-
-A KDE settings window will open. If the profile appears in the
-"Color profile" dropdown, select it. Otherwise:
-
-  1. Click the dropdown → select "ICC profile"
-  2. Browse to: /usr/share/color/icc/colord/cse_200nits_amd.icc
-  3. Click OK
+    → Applied to KWin output config
+    → KWin will use the new ICC profile
 
 +----------------------------------------------------+
 |  All done!                                         |
@@ -103,7 +96,7 @@ A KDE settings window will open. If the profile appears in the
 Selected profile: cse_200nits_amd.icc
 ```
 
-That's it. The gamma correction is already active on your display (via dispwin). For color-aware apps to use the profile, select it in the KDE settings as described above. If something looks off, undo everything:
+That's it. The gamma correction is already active on your display (via dispwin), and the ICC profile is set directly in KWin's output configuration. If something looks off, undo everything:
 
 ```bash
 bash tools/remove-profile.sh
