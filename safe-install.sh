@@ -42,29 +42,15 @@ echo "║        cachy-screen-enhancer — Auto Install      ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
-# ── Step 1: Detect GPU method ───────────────────────────────
+# ── Step 1: Detect GPU method (via Python module — uses connected
+#          display filters, not just the first DRM card found)
 echo "[*] Detecting GPU method..."
-GPU_METHOD=""
-for card in /sys/class/drm/card*/device/vendor; do
-    [ -f "$card" ] || continue
-    vendor=$(cat "$card" 2>/dev/null || true)
-    if [ "$vendor" = "0x1002" ]; then
-        GPU_METHOD="amd"
-        break
-    elif [ "$vendor" = "0x10de" ]; then
-        GPU_METHOD="nvidia"
-        break
-    fi
-done
-
-if [ -z "$GPU_METHOD" ] && [ -e /dev/nvidia0 ]; then
-    GPU_METHOD="nvidia"
-fi
-
-if [ -z "$GPU_METHOD" ]; then
-    GPU_METHOD="generic"
-fi
-
+GPU_METHOD=$(python3 -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR/src')
+from cse_lib.gpu_detect import detect_gpu_method
+print(detect_gpu_method())
+" 2>/dev/null || echo "generic")
 echo "    → Method: $GPU_METHOD"
 echo ""
 
@@ -140,6 +126,14 @@ except Exception as e:
     fi
 
     BEST_FILE="$PROFILES_DIR/cse_${WL}nits_${GPU_METHOD}.icc"
+
+    # If no profile exists for this GPU method, try AMD (which has
+    # prebuilt profiles) and warn the user
+    if [ ! -f "$BEST_FILE" ]; then
+        echo "    ⚠ No prebuilt profile for $GPU_METHOD method at ${WL}nits."
+        echo "    → Using AMD-optimized profile instead."
+        BEST_FILE="$PROFILES_DIR/cse_${WL}nits_amd.icc"
+    fi
 fi
 
 echo ""
@@ -165,23 +159,37 @@ echo ""
 # ── Step 6: Install via colord ────────────────────────────────
 echo "[*] Installing profile via colord..."
 
-# Check if colord service is running
+# Ensure colord is running (give it time to start if just installed)
 if ! systemctl is-active --quiet colord 2>/dev/null; then
     echo "    → Starting colord service..."
-    sudo systemctl start colord 2>/dev/null || true
+    sudo systemctl enable --now colord 2>/dev/null || true
+    # Wait for the service to become active (up to 5 seconds)
+    for i in 1 2 3 4 5; do
+        if systemctl is-active --quiet colord 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
 fi
 
-# Add profile to colord
-PROFILE_ID=$(colormgr add-profile "$BEST_FILE" 2>/dev/null | grep -oP 'icc-\w+' | head -1 || true)
-
-if [ -z "$PROFILE_ID" ]; then
-    # Try alternative: import with full path
+# Retry adding the profile (up to 3 attempts with 1s delay)
+PROFILE_ID=""
+for attempt in 1 2 3; do
+    PROFILE_ID=$(colormgr add-profile "$BEST_FILE" 2>/dev/null | grep -oP 'icc-\w+' | head -1 || true)
+    if [ -n "$PROFILE_ID" ]; then
+        break
+    fi
+    # Try alternative method: import-profile
     PROFILE_ID=$(colormgr import-profile "$BEST_FILE" 2>/dev/null | grep -oP 'icc-\w+' | head -1 || true)
-fi
+    if [ -n "$PROFILE_ID" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ -z "$PROFILE_ID" ]; then
-    echo "    ⚠ Could not add profile via colord."
-    echo "    → Install manually: KDE System Settings → Color Management → Add → Browse"
+    echo "    ⚠ Could not add profile via colord after multiple attempts."
+    echo "    → Try installing manually: KDE System Settings → Color Management → Add → Browse"
     echo "    → Select: $BEST_FILE"
     echo ""
     echo "╔══════════════════════════════════════════════════╗"
@@ -192,24 +200,16 @@ fi
 
 echo "    → Added profile: $PROFILE_ID"
 
-# Get device ID for the display
-DEVICE_ID=""
-DEVICE_LIST=$(colormgr get-devices 2>/dev/null)
-if echo "$DEVICE_LIST" | grep -q "Device ID"; then
-    DEVICE_ID=$(echo "$DEVICE_LIST" | grep -B1 "$CONNECTOR" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
-fi
-
-if [ -z "$DEVICE_ID" ] && [ -n "$CONNECTOR" ]; then
-    DEVICE_ID=$(echo "$DEVICE_LIST" | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+# Get device ID for the display and set as default
+DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep -B1 "$CONNECTOR" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+if [ -z "$DEVICE_ID" ]; then
+    DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
 fi
 
 if [ -n "$DEVICE_ID" ]; then
     colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
     colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
     echo "    → Set as default for $DEVICE_ID"
-else
-    echo "    → Set as default (device auto-detection)"
-    colormgr device-make-profile-default "$(colormgr get-devices 2>/dev/null | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r')" "$PROFILE_ID" 2>/dev/null || true
 fi
 
 echo ""
