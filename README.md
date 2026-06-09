@@ -39,7 +39,12 @@ If you're on a different distro or desktop environment, check out `docs/TROUBLES
 This is the recommended way. One command, auto-detects everything about your system, picks the best profile, and installs it.
 
 ```bash
-cd cachy-screen-enhancer-codebase
+# Clone the repo (if you haven't already)
+git clone https://github.com/galpt/cachy-screen-enhancer.git
+cd cachy-screen-enhancer/cachy-screen-enhancer-codebase
+
+# One command — that's it. Make sure you're in the
+# cachy-screen-enhancer-codebase/ directory when running it.
 bash safe-install.sh
 ```
 

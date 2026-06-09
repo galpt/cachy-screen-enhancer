@@ -2,6 +2,12 @@
 
 > Common issues and how to fix them.
 
+**Before trying anything here, make sure you're in the `cachy-screen-enhancer-codebase/` directory:**
+```bash
+cd cachy-screen-enhancer/cachy-screen-enhancer-codebase
+```
+All commands below assume you're running them from there.
+
 ---
 
 ## Profile doesn't seem to be doing anything
