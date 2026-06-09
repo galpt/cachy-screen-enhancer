@@ -18,10 +18,18 @@ import math
 
 # sRGB piecewise breakpoints (IEC 61966-2-1:1999)
 SRGB_X1: float = 0.0404482362771082
-"""sRGB linear breakpoint — value of L at V == 0.04045 (V/12.92)."""
+"""sRGB V-domain breakpoint for the forward EOTF (continuous variant).
+
+The IEC 61966-2-1 spec defines this as exactly 0.04045, but that produces a
+~2.3e-9 discontinuity at the linear-to-power transition. The value here
+eliminates that discontinuity by using the true root of
+V/12.92 = ((V+0.055)/1.055)^2.4, rounded to 64-bit float precision."""
 
 SRGB_X2: float = 0.00313066844250063
-"""sRGB nonlinear breakpoint — L threshold at which encoding switches."""
+"""sRGB L-domain breakpoint for the inverse EOTF (continuous variant).
+
+Corresponds to SRGB_X1 / 12.92 ≈ 0.0031306684425006347, rounded to
+64-bit float precision. The IEC 61966-2-1 spec defines this as 0.0031308."""
 
 # Perceptual Quantizer (ST.2084 / BT.2100) constants (SMPTE ST 2084:2014)
 PQ_M1: float = 0.1593017578125
@@ -59,9 +67,12 @@ def srgb_eotf(V: float) -> float:
         >>> srgb_eotf(0.5)
         0.214041140...
 
-    Formula:
-        L = V / 12.92                        if V <= 0.04045
-        L = ((V + 0.055) / 1.055) ** 2.4     otherwise
+    Formula (continuous breakpoint — see :data:`SRGB_X1`):
+        L = V / 12.92                            if V <= 0.040448236...
+        L = ((V + 0.055) / 1.055) ** 2.4         otherwise
+
+    The IEC 61966-2-1 spec defines the breakpoint as exactly 0.04045;
+    this implementation uses the continuous variant (SRGB_X1) instead.
     """
     if V <= SRGB_X1:
         return V / 12.92
@@ -87,9 +98,12 @@ def srgb_eotf_inverse(L: float) -> float:
         >>> srgb_eotf_inverse(0.214041140)
         0.5
 
-    Formula:
-        V = 12.92 * L                             if L <= 0.0031308
-        V = 1.055 * L ** (1 / 2.4) - 0.055        otherwise
+    Formula (continuous breakpoint — see :data:`SRGB_X2`):
+        V = 12.92 * L                                 if L <= 0.003130668...
+        V = 1.055 * L ** (1 / 2.4) - 0.055            otherwise
+
+    The IEC 61966-2-1 spec defines the breakpoint as exactly 0.0031308;
+    this implementation uses the continuous variant (SRGB_X2) instead.
     """
     if L <= SRGB_X2:
         return 12.92 * L

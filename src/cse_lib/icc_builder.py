@@ -36,13 +36,6 @@ _SRGB_GY: float = 0.6000
 _SRGB_BX: float = 0.1500
 _SRGB_BY: float = 0.0600
 
-# Bradford D65→D50 chromatic adaptation matrix (3x3).
-_BRADFORD_D65_D50: List[List[float]] = [
-    [1.047886, 0.022919, -0.050216],
-    [0.029582, 0.990484, -0.017067],
-    [-0.009234, 0.015043, 0.752131],
-]
-
 # Inverse of the Bradford cone-response matrix
 _M_BRAD_INV: List[List[float]] = [
     [0.9869929, -0.1470543, 0.1599627],
@@ -149,7 +142,11 @@ def build_icc_profile(
     tag_data.append(("cprt", cprt_bytes))
 
     # wtpt (XYZType)
-    wtpt_bytes = _build_xyz_type(*white_xyz)
+    # Per ICC.1:2010, the media white point must be expressed relative
+    # to the PCS white point (D50), NOT the native display white point.
+    # Since the colorant tags (rXYZ/gXYZ/bXYZ) are already D50-adapted
+    # via the chad matrix, wtpt must also be D50.
+    wtpt_bytes = _build_xyz_type(*d50_xyz)
     tag_data.append(("wtpt", wtpt_bytes))
 
     # chad (S15Fixed16ArrayType — 3x3 matrix)
@@ -339,14 +336,21 @@ def validate_icc_profile(icc_bytes: bytes) -> bool:
 # ---------------------------------------------------------------------------
 
 def _build_text_description(text: str) -> bytes:
-    """Build a ``textDescriptionType`` tag (v2-compatible ASCII)."""
-    data = text.encode("ascii", errors="replace") + b"\x00"
+    """Build a ``textDescriptionType`` tag (ICC v4 format).
+
+    ICC v4 layout:
+        bytes 0-3:   ``desc`` signature
+        bytes 4-7:   reserved (0)
+        bytes 8-9:   ISO 639-1 language code (``b'en'`` for English)
+        bytes 10-11: ISO 3166 country code (``b'US'``)
+        bytes 12+:   null-terminated ASCII text, padded to 4 bytes
+    """
+    ascii_text = text.encode("ascii", errors="replace") + b"\x00"
     # Pad to 4-byte boundary
-    while len(data) % 4 != 0:
-        data += b"\x00"
-    desc_len = len(data)
-    header = struct.pack(">4sI", b"desc", desc_len)
-    return header + data
+    while len(ascii_text) % 4 != 0:
+        ascii_text += b"\x00"
+    header = struct.pack(">4sI2s2s", b"desc", 0, b"en", b"US")
+    return header + ascii_text
 
 
 def _build_xyz_type(x: float, y: float, z: float) -> bytes:
