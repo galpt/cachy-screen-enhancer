@@ -226,7 +226,7 @@ Prints everything the tool detected about your system.
 ### Project structure
 
 ```
-cachy-screen-enhancer-codebase/
+.
 │
 ├── safe-install.sh              ★ One-command auto-install (start here!)
 │
@@ -269,7 +269,7 @@ Here's every file and directory in the project and what it's for.
 (See the tree above in "I want to customize things" — same layout.)
 
 ```
-cachy-screen-enhancer-codebase/
+.
 ├── safe-install.sh              ★ One-command auto-install for non-technical users
 ├── src/
 │   ├── cse-gen.py               CLI tool (power users: custom profiles)
