@@ -41,11 +41,10 @@ This is the recommended way. One command, auto-detects everything about your sys
 ```bash
 # Clone the repo (if you haven't already)
 git clone https://github.com/galpt/cachy-screen-enhancer.git
-cd cachy-screen-enhancer/cachy-screen-enhancer-codebase
+cd cachy-screen-enhancer
 
-# One command — that's it. Make sure you're in the
-# cachy-screen-enhancer-codebase/ directory when running it.
-bash safe-install.sh
+# One command — that's it
+bash cachy-screen-enhancer-codebase/safe-install.sh
 ```
 
 Here's what happens when you run it:
@@ -172,7 +171,11 @@ If you want the *real* technical details (transfer functions, PQ EOTFs, parametr
 
 **It broke after I woke my laptop from sleep** → This is a known quirk with Wayland and colord — the profile sometimes gets lost on resume. Just run `safe-install.sh` again. Or check `docs/TROUBLESHOOTING.md` for a workaround that auto-reapplies it.
 
-**Something else?** → Open an issue on GitHub! Include your EDID dump (`bash tools/dump-edid.sh`) so we can help.
+**Something else?** → Open an issue on GitHub! Include your EDID dump (`bash cachy-screen-enhancer-codebase/tools/dump-edid.sh`) so we can help.
+
+> Commands like `tools/remove-profile.sh` and `tools/dump-edid.sh`
+> assume you're inside the `cachy-screen-enhancer-codebase/` directory.
+> If you're at the repo root, prefix them with `cachy-screen-enhancer-codebase/`.
 
 ---
 

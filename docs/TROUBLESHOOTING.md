@@ -2,11 +2,10 @@
 
 > Common issues and how to fix them.
 
-**Before trying anything here, make sure you're in the `cachy-screen-enhancer-codebase/` directory:**
+**Before running any commands below, cd into the codebase directory first:**
 ```bash
 cd cachy-screen-enhancer/cachy-screen-enhancer-codebase
 ```
-All commands below assume you're running them from there.
 
 ---
 
