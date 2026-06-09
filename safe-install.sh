@@ -37,9 +37,9 @@ fi
 
 # ── Banner ─────────────────────────────────────────────────────
 echo ""
-echo "╔══════════════════════════════════════════════════╗"
-echo "║        cachy-screen-enhancer — Auto Install      ║"
-echo "╚══════════════════════════════════════════════════╝"
+echo "+----------------------------------------------------+"
+echo "|       cachy-screen-enhancer — Auto Install         |"
+echo "+----------------------------------------------------+"
 echo ""
 
 # ── Step 1: Detect GPU method (via Python module — uses connected
@@ -165,15 +165,13 @@ else
 fi
 
 echo ""
-
-# ── Success ───────────────────────────────────────────────────
-echo "╔══════════════════════════════════════════════════╗"
-echo "║  Done! Your screen is now using gamma 2.2.       ║"
-echo "║                                                   ║"
-echo "║  Selected profile: $PROFILE_NAME"
-echo "║                                                   ║"
-echo "║  If colors look off, re-run:                      ║"
-echo "║    bash tools/remove-profile.sh                   ║"
-echo "║  to restore the default sRGB profile.             ║"
-echo "╚══════════════════════════════════════════════════╝"
+echo "Selected profile: $PROFILE_NAME"
+echo ""
+echo "+----------------------------------------------------+"
+echo "|  Done! Your screen is now using gamma 2.2.         |"
+echo "|                                                    |"
+echo "|  If colors look off, run:                          |"
+echo "|    bash tools/remove-profile.sh                    |"
+echo "|  to restore the default sRGB profile.              |"
+echo "+----------------------------------------------------+"
 echo ""

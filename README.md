@@ -60,9 +60,9 @@ Here's what happens when you run it:
 And then you get a nice summary like this:
 
 ```
-╔══════════════════════════════════════════════════╗
-║        cachy-screen-enhancer — Auto Install      ║
-╚══════════════════════════════════════════════════╝
++----------------------------------------------------+
+|       cachy-screen-enhancer — Auto Install         |
++----------------------------------------------------+
 
 [*] Detecting GPU method...
     → AMD Radeon 680M (method: amd)
@@ -81,9 +81,9 @@ And then you get a nice summary like this:
     → Added profile: icc-abc123
     → Set as default for eDP-1
 
-╔══════════════════════════════════════════════════╗
-║  Done! Your screen is now using gamma 2.2.       ║
-╚══════════════════════════════════════════════════╝
++----------------------------------------------------+
+|  Done! Your screen is now using gamma 2.2.         |
++----------------------------------------------------+
 ```
 
 That's it. Seriously. Go look at your screen — blacks should look deeper, shadows should have more detail. If something looks off, just run this to undo everything:

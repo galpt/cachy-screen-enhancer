@@ -553,9 +553,9 @@ flowchart TD
 When the script runs, the user sees:
 
 ```
-╔══════════════════════════════════════════════════╗
-║        cachy-screen-enhancer — Auto Install      ║
-╚══════════════════════════════════════════════════╝
++----------------------------------------------------+
+|       cachy-screen-enhancer — Auto Install         |
++----------------------------------------------------+
 
 [*] Requesting sudo access (one-time)...
 [sudo] password for galpt:
@@ -581,13 +581,13 @@ When the script runs, the user sees:
     → Profile added: icc-abc123
     → Set as default for eDP-1
 
-╔══════════════════════════════════════════════════╗
-║  Done! Your screen is now using gamma 2.2.       ║
-║                                                   ║
-║  If colors look off, re-run:                      ║
-║    bash tools/remove-profile.sh                   ║
-║  to restore the default sRGB profile.             ║
-╚══════════════════════════════════════════════════╝
++----------------------------------------------------+
+|  Done! Your screen is now using gamma 2.2.         |
+|                                                    |
+|  If colors look off, run:                          |
+|    bash tools/remove-profile.sh                    |
+|  to restore the default sRGB profile.              |
++----------------------------------------------------+
 ```
 
 #### Error Handling
