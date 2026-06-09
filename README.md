@@ -133,7 +133,7 @@ Open **KDE System Settings → Display → Brightness**. If your slider is rough
 ### How to install manually
 
 1. Pick a file from `profiles/icc/` (use the tables above)
-2. Open **KDE System Settings → Color Management**
+2. Open **System Settings → Display & Monitor → Display Configuration → Color profile** (on CachyOS/KDE; other distros: **KDE System Settings → Color Management**)
 3. Click **"Add"** → **"Browse..."** → select the `.icc` file
 4. Check **"Add as HDR Profile"** → **"OK"**
 5. Select the profile and click **"Set as Default Profile"**
@@ -165,7 +165,7 @@ If you want the *real* technical details (transfer functions, PQ EOTFs, parametr
 
 **Colors look washed out** → Try a lower brightness profile. If you used `cse_200nits_amd.icc`, try `cse_120nits_amd.icc`.
 
-**Nothing changed at all** → Make sure the profile is set as default in **KDE System Settings → Color Management**. Or just run `bash safe-install.sh` again.
+**Nothing changed at all** → Make sure the profile is set as default in **System Settings → Display & Monitor → Display Configuration → Color profile**. Or just run `bash safe-install.sh` again.
 
 **I want to undo everything** → `bash tools/remove-profile.sh`. This restores the default sRGB profile.
 

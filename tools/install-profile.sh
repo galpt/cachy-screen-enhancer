@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install-profile.sh — Install an ICC profile via colord
+# install-profile.sh — Install an ICC profile system-wide
 #
 # Usage:
 #   bash tools/install-profile.sh [path/to/profile.icc]
@@ -37,33 +37,34 @@ if [ ! -f "$PROFILE" ]; then
     exit 1
 fi
 
-echo "[*] Installing: $(basename "$PROFILE")"
+PROFILE_NAME="$(basename "$PROFILE")"
+echo "[*] Installing: $PROFILE_NAME"
 
-# Start colord if not running
-if ! systemctl is-active --quiet colord 2>/dev/null; then
-    echo "    → Starting colord..."
-    sudo systemctl start colord 2>/dev/null || true
-fi
+# Copy to system profile directory and restart colord
+COLORD_DIR="/usr/share/color/icc/colord"
+sudo mkdir -p "$COLORD_DIR"
+sudo cp "$PROFILE" "$COLORD_DIR/$PROFILE_NAME"
+sudo systemctl restart colord 2>/dev/null || true
+sleep 1
 
-PROFILE_ID=$(colormgr add-profile "$PROFILE" 2>/dev/null | grep -oP 'icc-\w+' | head -1 || true)
+# Find the registered profile ID
+PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+
 if [ -z "$PROFILE_ID" ]; then
-    PROFILE_ID=$(colormgr import-profile "$PROFILE" 2>/dev/null | grep -oP 'icc-\w+' | head -1 || true)
+    echo "    → Copied to $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
+    echo "    → Select it from the list"
+    exit 0
 fi
 
-if [ -z "$PROFILE_ID" ]; then
-    echo "✗ Failed to add profile to colord. Try:"
-    echo "    KDE System Settings → Color Management → Add → Browse"
-    exit 1
-fi
+echo "    → Registered: $PROFILE_ID"
 
-echo "    → Profile ID: $PROFILE_ID"
-
-# Add to first available device
-DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+# Set as default for the first display device
+DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
 if [ -n "$DEVICE_ID" ]; then
     colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
     colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
     echo "    → Set as default for $DEVICE_ID"
 fi
 
-echo "[✓] Profile installed successfully."
+echo "[✓] Profile installed."
