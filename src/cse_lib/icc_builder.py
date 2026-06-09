@@ -377,7 +377,10 @@ def _build_text_description(text: str) -> bytes:
     # mluc header: signature(4) + reserved(4) + record_count(4) + record_size(4)
     header = struct.pack(">4sIII", b"mluc", 0, 1, 12)
     # Single record: language(2) + country(2) + length(4) + offset(4)
-    record = struct.pack(">2s2sII", b"en", b"US", len(utf16), 0)
+    # text_off is the byte offset from the START of the mluc structure to
+    # the text data. After header (16 bytes) + 1 record (12 bytes) = 28 bytes.
+    text_off = 28
+    record = struct.pack(">2s2sII", b"en", b"US", len(utf16), text_off)
     return header + record + utf16
 
 
