@@ -157,16 +157,28 @@ fi
 echo ""
 echo "[*] Installing ICC profile..."
 
-# Copy to system directory + import via colormgr (explicit registration)
+# Generate a separate ICC profile WITHOUT VCGT for colord registration.
+# colord rejects profiles with embedded VCGT tags on some setups (the
+# reference profiles in /usr/share/color/icc/colord/ like AdobeRGB1998.icc
+# and sRGB.icc don't have VCGT tags — they describe the display, they
+# don't correct it). The gamma correction is applied by dispwin above.
+ICC_NO_VCGT="$OUTPUT_DIR/${PROFILE_NAME%.icc}_no-vcgt.icc"
+python3 "$SCRIPT_DIR/src/cse-gen.py" --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR --output "$ICC_NO_VCGT" >/dev/null 2>&1 || true
+
+# Copy to system directory
 COLORD_DIR="/usr/share/color/icc/colord"
 sudo mkdir -p "$COLORD_DIR"
-sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
+if [ -f "$ICC_NO_VCGT" ]; then
+    sudo cp "$ICC_NO_VCGT" "$COLORD_DIR/$PROFILE_NAME"
+else
+    sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
+fi
 
-# Import the profile into colord's database explicitly
+# Register with colord via import-profile
 IMPORT_OUTPUT=$(sudo colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 || true)
 PROFILE_ID=$(echo "$IMPORT_OUTPUT" | grep -oP 'icc-\w+' | head -1 || echo "")
 
-# Fallback: if import-profile fails, restart colord to scan the directory
+# Fallback: restart colord to scan
 if [ -z "$PROFILE_ID" ]; then
     sudo systemctl restart colord 2>/dev/null || true
     sleep 2
