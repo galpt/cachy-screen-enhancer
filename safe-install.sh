@@ -157,45 +157,53 @@ fi
 echo ""
 echo "[*] Installing ICC profile..."
 
-# Generate a separate ICC profile WITHOUT VCGT for colord registration.
-# colord rejects profiles with embedded VCGT tags on some setups (the
-# reference profiles in /usr/share/color/icc/colord/ like AdobeRGB1998.icc
-# and sRGB.icc don't have VCGT tags — they describe the display, they
-# don't correct it). The gamma correction is applied by dispwin above.
+# Generate a VCGT-free ICC profile for colord (standard ICC display
+# description — no hardware correction tag). Gamma correction is handled
+# separately by dispwin above.
 ICC_NO_VCGT="$OUTPUT_DIR/${PROFILE_NAME%.icc}_no-vcgt.icc"
 python3 "$SCRIPT_DIR/src/cse-gen.py" --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR --output "$ICC_NO_VCGT" >/dev/null 2>&1 || true
+ICC_FILE="${ICC_NO_VCGT}"
+[ ! -f "$ICC_FILE" ] && ICC_FILE="$BEST_FILE"
 
-# Copy to system directory
-COLORD_DIR="/usr/share/color/icc/colord"
-sudo mkdir -p "$COLORD_DIR"
-if [ -f "$ICC_NO_VCGT" ]; then
-    sudo cp "$ICC_NO_VCGT" "$COLORD_DIR/$PROFILE_NAME"
-else
-    sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
-fi
+# Copy to BOTH system and user-local colord directories (inotify
+# watches both, and the user-local path works without system-wide
+# permissions on some setups).
+COLORD_SYS="/usr/share/color/icc/colord"
+COLORD_USER="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
+sudo mkdir -p "$COLORD_SYS"
+sudo cp "$ICC_FILE" "$COLORD_SYS/$PROFILE_NAME"
+sudo chmod 644 "$COLORD_SYS/$PROFILE_NAME"  # ensure world-readable for colord user
+mkdir -p "$COLORD_USER"
+cp "$ICC_FILE" "$COLORD_USER/$PROFILE_NAME"
 
-# Register with colord via import-profile
-IMPORT_OUTPUT=$(sudo colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 || true)
-PROFILE_ID=$(echo "$IMPORT_OUTPUT" | grep -oP 'icc-\w+' | head -1 || echo "")
+# Trigger inotify by touching the directories and waiting for colord
+# to pick up the new file. colord automatically registers profiles
+# found in its monitored directories — no import command needed.
+touch "$COLORD_SYS" "$COLORD_USER"
+for i in 1 2 3 4 5; do
+    PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+    [ -n "$PROFILE_ID" ] && break
+    sleep 1
+done
 
-# Fallback: restart colord to scan
+# Fallback: restart colord to force a rescan
 if [ -z "$PROFILE_ID" ]; then
     sudo systemctl restart colord 2>/dev/null || true
     sleep 2
-    PROFILE_ID=$(colormgr get-profiles 2>&1 | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+    PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
 fi
 
 if [ -z "$PROFILE_ID" ]; then
-    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Copied to $COLORD_SYS/$PROFILE_NAME"
+    echo "    → Copied to $COLORD_USER/$PROFILE_NAME"
     echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
-    echo "    → Add it manually from the list"
+    echo "    → Add the profile from the list"
 else
     echo "    → Registered: $PROFILE_ID"
 
-    # Get or create a device to attach the profile to
-    DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+    # Get or create a display device
+    DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
     if [ -z "$DEVICE_ID" ]; then
-        # No devices registered — create one for the detected connector
         DEVICE_ID=$(sudo colormgr create-device "display-$CONNECTOR" "system" "display" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
         sleep 1
     fi
