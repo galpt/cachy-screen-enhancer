@@ -55,7 +55,7 @@ Here's what happens when you run it:
 4. It finds your display, reads its EDID, and detects your current brightness level
 5. It generates a custom ICC profile (with accurate TRC and white point) and a `.cal` gamma LUT
 6. It applies the gamma correction to your GPU via `dispwin` — this is what changes the blacks
-7. It registers the ICC profile with colord and opens KDE Display Settings so you can select it
+7. It sets the ICC profile via `kscreen-doctor` — the proper KDE API — so the GUI and KWin both use it
 
 And then you get a nice summary like this:
 
@@ -80,8 +80,8 @@ And then you get a nice summary like this:
     → Gamma correction applied via dispwin
 
 [*] Installing ICC profile...
-    → Applied to KWin output config
-    → KWin will use the new ICC profile
+    → Setting ICC profile via kscreen-doctor...
+    → ICC profile set for eDP-1
 
 +----------------------------------------------------+
 |  All done!                                         |

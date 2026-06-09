@@ -184,44 +184,16 @@ if [ -z "$PROFILE_ID" ]; then
     PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
 fi
 
-# Set the ICC profile directly in KWin's output configuration file.
-# KWin stores per-output settings in ~/.config/kwinoutputconfig.json,
-# including the iccProfilePath and colorProfileSource fields.
-# Note: $CONNECTOR is like "card2-eDP-1" but KWin uses "eDP-1" (no card prefix).
+# Set the ICC profile via kscreen-doctor (the proper KDE API for display
+# color management). This updates both KScreen's state AND KWin's config,
+# so the GUI reflects the change immediately.
 KWIN_CONNECTOR="${CONNECTOR#card*-}"
-KWIN_CONFIG="$HOME/.config/kwinoutputconfig.json"
-if [ -f "$KWIN_CONFIG" ]; then
-    python3 -c "
-import json, sys
-
-with open('$KWIN_CONFIG') as f:
-    config = json.load(f)
-
-connector = '$KWIN_CONNECTOR'
-changed = False
-for section in config:
-    if section.get('name') == 'outputs':
-        for output in section.get('data', []):
-            if output.get('connectorName') == connector:
-                output['colorProfileSource'] = 'ICC'
-                output['iccProfilePath'] = '$COLORD_DIR/$PROFILE_NAME'
-                changed = True
-                break
-
-if changed:
-    with open('$KWIN_CONFIG', 'w') as f:
-        json.dump(config, f, indent=2)
-    print('    → Applied to KWin output config')
-else:
-    print(f'    → Could not find output {connector} in KWin config')
-" 2>&1
-
-    # Notify KWin to reload the config
-    dbus-send --session --dest=org.kde.KWin --type=method_call \
-        /KWin org.kde.KWin.reconfigure &>/dev/null || true
-    echo "    → KWin reconfigured to use the new ICC profile"
+echo "    → Setting ICC profile via kscreen-doctor..."
+if command -v kscreen-doctor &>/dev/null; then
+    kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile.\"$COLORD_DIR/$PROFILE_NAME\"" 2>&1 || \
+    echo "    ⚠ kscreen-doctor failed"
+    echo "    → ICC profile set for $KWIN_CONNECTOR"
 else
-    echo "    → KWin config not found at $KWIN_CONFIG"
     echo "    → Open System Settings → Display & Monitor → Display Configuration"
     echo "    → Click your monitor → Color profile"
     echo "    → Select \"ICC profile\" and browse to: $COLORD_DIR/$PROFILE_NAME"

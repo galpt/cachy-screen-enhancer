@@ -105,33 +105,16 @@ done
 echo "    → Cleaning up output/..."
 rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" "$SCRIPT_DIR/output/*_no-vcgt.icc" 2>/dev/null || true
 
-# Step 6: Restore KWin output config (revert to sRGB)
-KWIN_CONFIG="$HOME/.config/kwinoutputconfig.json"
-if [ -f "$KWIN_CONFIG" ]; then
-    python3 -c "
-import json
-
-with open('$KWIN_CONFIG') as f:
-    config = json.load(f)
-
-changed = False
-for section in config:
-    if section.get('name') == 'outputs':
-        for output in section.get('data', []):
-            if output.get('colorProfileSource') == 'ICC' and 'cse_' in output.get('iccProfilePath', ''):
-                output['colorProfileSource'] = 'sRGB'
-                output['iccProfilePath'] = ''
-                changed = True
-
-if changed:
-    with open('$KWIN_CONFIG', 'w') as f:
-        json.dump(config, f, indent=2)
-    print('    → Restored default sRGB in KWin config')
-    import subprocess
-    subprocess.run(['dbus-send', '--session', '--dest=org.kde.KWin',
-        '--type=method_call', '/KWin', 'org.kde.KWin.reconfigure'],
-        capture_output=True)
-"
+# Step 6: Reset ICC profile via kscreen-doctor
+echo "    → Resetting ICC profile via kscreen-doctor..."
+if command -v kscreen-doctor &>/dev/null; then
+    # Reset to no custom ICC profile
+    if kscreen-doctor "output.eDP-1.iccprofile.\"\"" 2>/dev/null; then
+        echo "    → ICC profile reset to default"
+    else
+        # If reset fails, try setting to sRGB color profile source
+        kscreen-doctor "output.eDP-1.iccprofile.\"/usr/share/color/icc/colord/sRGB.icc\"" 2>/dev/null || true
+    fi
 fi
 
 # Step 7: Restart colord to complete cleanup
