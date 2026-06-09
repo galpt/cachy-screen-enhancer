@@ -68,8 +68,7 @@ def build_icc_profile(
 
     By default, this creates a standard display description profile (no VCGT
     tag) suitable for Linux/KDE color management. When *include_vcgt* is
-    ``True``, a ``vcgt`` tag is embedded for direct GPU LUT manipulation
-    (Windows MHC2-style).
+    ``True``, a ``vcgt`` tag is embedded for direct GPU LUT manipulation.
 
     Args:
         desc_text: Description string for the ``desc`` tag (e.g.
@@ -83,8 +82,8 @@ def build_icc_profile(
         gamma: Target gamma exponent (default 2.2).
         include_vcgt: Whether to embed a ``vcgt`` tag for hardware LUT
             correction (default ``False``). On Linux, the ICC profile should
-            describe the display, not correct it — use ``xcalib`` or
-            ``dispwin`` with a separate ``.cal`` file for hardware correction.
+            describe the display, not correct it — use ``dispwin`` from
+            ArgyllCMS with a separate ``.cal`` file for hardware correction.
 
     Returns:
         Complete ICC v4 profile as ``bytes``.
@@ -145,11 +144,11 @@ def build_icc_profile(
 
     tag_data: List[Tuple[str, bytes]] = []
 
-    # desc (textDescriptionType — v2-compatible)
+    # desc (multiLocalizedUnicodeType — required by lcms2/colord for v4)
     desc_bytes = _build_text_description(desc_text)
     tag_data.append(("desc", desc_bytes))
 
-    # cprt (textDescriptionType)
+    # cprt (multiLocalizedUnicodeType)
     cprt_bytes = _build_text_description("No copyright, use freely")
     tag_data.append(("cprt", cprt_bytes))
 
