@@ -108,11 +108,11 @@ def generate_all(output_dir, gpu_method, gamma, black_level, cal_only, edid_path
     for wl in ALL_LUMINANCE_LEVELS:
         method = gpu_method or detect_gpu_method()
         if cal_only:
-            out_name = f"cse_{wl}nits_{method}.cal"
+            out_name = f"cse_{wl:03d}nits_{method}.cal"
             out_path = output_dir / out_name
             path = build_cal(wl, gamma, method, out_path, black_level)
         else:
-            out_name = f"cse_{wl}nits_{method}.icc"
+            out_name = f"cse_{wl:03d}nits_{method}.icc"
             out_path = output_dir / out_name
             path = build_profile(wl, gamma, method, out_path, black_level, edid_path=edid_path, with_vcgt=with_vcgt)
         results.append(path)
@@ -278,7 +278,7 @@ def main():
         out_path = Path(args.output)
     else:
         ext = ".cal" if args.cal_only else ".icc"
-        out_name = f"cse_{wl}nits_{gpu_method}{ext}"
+        out_name = f"cse_{wl:03d}nits_{gpu_method}{ext}"
         out_path = output_dir / out_name
 
     if args.cal_only:
