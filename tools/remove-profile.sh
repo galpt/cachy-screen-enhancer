@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 #
-# remove-profile.sh — Remove all cachy-screen-enhancer profiles from colord
+# remove-profile.sh — Remove all cachy-screen-enhancer profiles + restore sRGB
 #
 # Usage:
 #   bash tools/remove-profile.sh
 #
-# Restores the default sRGB profile.
+# Removes:
+#   - Any ICC files copied to /usr/share/color/icc/colord/
+#   - Any profiles registered in colord's database
+#   - Restores sRGB as default for all devices
 set -euo pipefail
 
 # ── Sudo session keepalive ────────────────────────────────────
@@ -28,24 +31,30 @@ fi
 
 echo "[*] Removing cachy-screen-enhancer profiles..."
 
-# Get all profiles
-PROFILES=$(colormgr get-profiles 2>/dev/null || true)
+# Step 1: Delete files from system profile directory
+COLORD_DIR="/usr/share/color/icc/colord"
+CSE_FILES=$(sudo find "$COLORD_DIR" -name 'cse_*.icc' -o -name 'cse_*.cal' 2>/dev/null || true)
+if [ -n "$CSE_FILES" ]; then
+    echo "$CSE_FILES" | while read -r f; do
+        echo "    → Deleting file: $(basename "$f")"
+        sudo rm -f "$f"
+    done
+else
+    echo "    → No cse files found in $COLORD_DIR"
+fi
 
-# Find cse profiles
-echo "$PROFILES" | grep -i "cachy-screen-enhancer" -B2 | grep "Profile ID" | awk '{print $NF}' | tr -d '\r' | while read -r pid; do
-    [ -z "$pid" ] && continue
-    echo "    → Removing $pid"
-    colormgr delete-profile "$pid" 2>/dev/null || true
-done
+# Step 2: Restart colord so it forgets the deleted profiles
+echo "    → Restarting colord to refresh profile list..."
+sudo systemctl restart colord 2>/dev/null || true
+sleep 1
 
-# Find device IDs and restore sRGB
-DEVICES=$(colormgr get-devices 2>/dev/null || true)
-echo "$DEVICES" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | while read -r did; do
+# Step 3: Restore sRGB as default for all display devices
+echo "[*] Restoring sRGB as default..."
+colormgr get-devices 2>/dev/null | grep "^Device ID:" | awk '{print $NF}' | tr -d '\r' | while read -r did; do
     [ -z "$did" ] && continue
-    # Try to add sRGB as default
     colormgr device-add-profile "$did" "sRGB" 2>/dev/null || true
     colormgr device-make-profile-default "$did" "sRGB" 2>/dev/null || true
     echo "    → Restored sRGB for $did"
 done
 
-echo "[✓] cachy-screen-enhancer profiles removed. Default sRGB restored."
+echo "[✓] All cachy-screen-enhancer profiles removed. Default sRGB restored."

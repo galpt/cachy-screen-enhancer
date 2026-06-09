@@ -134,40 +134,33 @@ PROFILE_NAME="$(basename "$BEST_FILE")"
 echo "    → Profile: $PROFILE_NAME"
 echo ""
 
-# ── Step 6: Register ICC profile with colord ─────────────────
-echo "[*] Installing ICC profile via colord (gamma correction embedded as VCGT)..."
-
-# Ensure colord is running
-if ! systemctl is-active --quiet colord 2>/dev/null; then
-    echo "    → Starting colord service..."
-    sudo systemctl enable --now colord
-    for i in 1 2 3 4 5; do
-        if systemctl is-active --quiet colord 2>/dev/null; then break; fi
-        sleep 1
-    done
-fi
+# ── Step 6: Install ICC profile system-wide ──────────────────
+echo "[*] Installing ICC profile system-wide..."
 
 COLORD_DIR="/usr/share/color/icc/colord"
 sudo mkdir -p "$COLORD_DIR"
 sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
 
-PROFILE_ID=$(colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
-[ -z "$PROFILE_ID" ] && PROFILE_ID=$(colormgr add-profile "$BEST_FILE" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
+# Restart colord so it rescans the system profile directory
+sudo systemctl restart colord 2>/dev/null || true
+sleep 1
+
+# Find the profile ID from colord's database
+PROFILE_ID=$(colormgr get-profiles 2>&1 | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
 
 if [ -z "$PROFILE_ID" ]; then
-    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME (not registered with colord)"
-    echo "    → To register manually:"
-    echo "      CachyOS: System Settings → Display & Monitor → Display Configuration → Color profile"
-    echo "      Other:   KDE System Settings → Color Management"
+    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
+    echo "    → Select 'cse_...' as your color profile"
 else
     echo "    → Registered: $PROFILE_ID"
-    # Set as default
-    DEVICE_ID=$(colormgr get-devices 2>&1 | grep -B1 "$CONNECTOR" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
-    [ -z "$DEVICE_ID" ] && DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+    # Set as default for the display device
+    DEVICE_ID=$(colormgr get-devices 2>&1 | grep -B1 "$CONNECTOR" | grep "Device ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+    [ -z "$DEVICE_ID" ] && DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
     if [ -n "$DEVICE_ID" ]; then
         colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
         colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
-        echo "    → Set as default for $DEVICE_ID"
+        echo "    → Set as default for display: $DEVICE_ID"
     fi
 fi
 
