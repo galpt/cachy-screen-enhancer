@@ -222,8 +222,8 @@ if changed:
     with open('$KWIN_CONFIG', 'w') as f:
         json.dump(config, f, indent=2)
     print('    → Applied to KWin output config')
-    else:
-        print(f'    → Could not find output {connector} in KWin config')
+else:
+    print(f'    → Could not find output {connector} in KWin config')
 " 2>&1
 
     # Notify KWin to reload the config (KWin watches this file, but
