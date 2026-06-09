@@ -40,23 +40,32 @@ fi
 PROFILE_NAME="$(basename "$PROFILE")"
 echo "[*] Installing: $PROFILE_NAME"
 
-# Copy + import profile into colord
-COLORD_DIR="/usr/share/color/icc/colord"
-sudo mkdir -p "$COLORD_DIR"
-sudo cp "$PROFILE" "$COLORD_DIR/$PROFILE_NAME"
+# Copy to system + user-local colord directories, trigger inotify
+COLORD_SYS="/usr/share/color/icc/colord"
+COLORD_USER="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
+sudo mkdir -p "$COLORD_SYS"
+sudo cp "$PROFILE" "$COLORD_SYS/$PROFILE_NAME"
+sudo chmod 644 "$COLORD_SYS/$PROFILE_NAME"
+mkdir -p "$COLORD_USER"
+cp "$PROFILE" "$COLORD_USER/$PROFILE_NAME"
+touch "$COLORD_SYS" "$COLORD_USER"
 
-IMPORT_OUTPUT=$(sudo colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 || true)
-PROFILE_ID=$(echo "$IMPORT_OUTPUT" | grep -oP 'icc-\w+' | head -1 || echo "")
+# Poll for up to 5 seconds for colord to auto-register (inotify)
+for i in 1 2 3 4 5; do
+    PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+    [ -n "$PROFILE_ID" ] && break
+    sleep 1
+done
 
-# Fallback: restart colord to scan
+# Fallback: restart colord to force rescan
 if [ -z "$PROFILE_ID" ]; then
     sudo systemctl restart colord 2>/dev/null || true
     sleep 2
-    PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+    PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
 fi
 
 if [ -z "$PROFILE_ID" ]; then
-    echo "    → Copied to $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Copied to $COLORD_SYS/$PROFILE_NAME"
     echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
     echo "    → Add it manually from the list"
     exit 0
@@ -64,7 +73,7 @@ fi
 
 echo "    → Registered: $PROFILE_ID"
 
-# Get or create a device
+# Get or create a display device
 DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
 if [ -z "$DEVICE_ID" ]; then
     DEVICE_ID=$(sudo colormgr create-device "display-${PROFILE_NAME%.*}" "system" "display" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)

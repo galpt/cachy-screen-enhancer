@@ -73,22 +73,20 @@ if command -v dispwin &>/dev/null; then
     dispwin -d "$DISP_IDX" -c 2>&1 || true
 fi
 
-# Step 4: Delete files from system profile directory
-echo "    → Removing files from /usr/share/color/icc/colord/..."
-COLORD_DIR="/usr/share/color/icc/colord"
-CSE_FILES=$(sudo find "$COLORD_DIR" -name 'cse_*.icc' -o -name 'cse_*.cal' 2>/dev/null || true)
-if [ -n "$CSE_FILES" ]; then
-    echo "$CSE_FILES" | while read -r f; do
-        echo "      Deleted: $(basename "$f")"
-        sudo rm -f "$f"
-    done
-else
-    echo "      No cse files found"
-fi
+# Step 4: Delete files from system + user colord directories
+echo "    → Removing files from colord directories..."
+for dir in "/usr/share/color/icc/colord" "${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"; do
+    if [ -d "$dir" ]; then
+        find "$dir" -name 'cse_*.icc' -o -name 'cse_*.cal' 2>/dev/null | while read -r f; do
+            echo "      Deleted: $(basename "$f") (from $dir)"
+            rm -f "$f" 2>/dev/null || sudo rm -f "$f" 2>/dev/null || true
+        done
+    fi
+done
 
 # Step 5: Clean up generated files in output/
 echo "    → Cleaning up output/..."
-rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" 2>/dev/null || true
+rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" "$SCRIPT_DIR/output/*_no-vcgt.icc" 2>/dev/null || true
 
 # Step 6: Restart colord to complete cleanup
 echo "    → Restarting colord..."
