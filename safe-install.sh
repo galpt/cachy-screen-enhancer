@@ -134,33 +134,41 @@ PROFILE_NAME="$(basename "$BEST_FILE")"
 echo "    → Profile: $PROFILE_NAME"
 echo ""
 
-# ── Step 6: Install ICC profile system-wide ──────────────────
-echo "[*] Installing ICC profile system-wide..."
+# ── Step 6: Try hardware gamma correction via dispwin (ArgyllCMS) ─
+echo "[*] Applying gamma correction..."
+if command -v dispwin &>/dev/null; then
+    if [ -f "$CAL_FILE" ]; then
+        dispwin -d 0 "$CAL_FILE" 2>&1 || echo "    ⚠ dispwin failed"
+        echo "    → Gamma correction applied via dispwin"
+    else
+        echo "    ⚠ No .cal file at $CAL_FILE"
+    fi
+else
+    echo "    → Install argyllcms for hardware gamma correction:"
+    echo "      sudo pacman -S argyllcms"
+fi
+echo ""
 
+# ── Step 7: Install ICC profile (for color-aware applications) ─
+echo "[*] Installing ICC profile..."
 COLORD_DIR="/usr/share/color/icc/colord"
 sudo mkdir -p "$COLORD_DIR"
 sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
-
-# Restart colord so it rescans the system profile directory
 sudo systemctl restart colord 2>/dev/null || true
 sleep 1
 
-# Find the profile ID from colord's database
 PROFILE_ID=$(colormgr get-profiles 2>&1 | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
-
 if [ -z "$PROFILE_ID" ]; then
-    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME"
-    echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
-    echo "    → Select 'cse_...' as your color profile"
+    echo "    → Copied to $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Settings → Display & Monitor → Display Configuration → Color profile"
+    echo "    → Select it as your color profile"
 else
-    echo "    → Registered: $PROFILE_ID"
-    # Set as default for the display device
     DEVICE_ID=$(colormgr get-devices 2>&1 | grep -B1 "$CONNECTOR" | grep "Device ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
     [ -z "$DEVICE_ID" ] && DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
     if [ -n "$DEVICE_ID" ]; then
         colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
         colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
-        echo "    → Set as default for display: $DEVICE_ID"
+        echo "    → Registered as default: $PROFILE_ID"
     fi
 fi
 
@@ -168,10 +176,13 @@ echo ""
 echo "Selected profile: $PROFILE_NAME"
 echo ""
 echo "+----------------------------------------------------+"
-echo "|  Done! Your screen is now using gamma 2.2.         |"
+echo "|  Profile installed.                                |"
 echo "|                                                    |"
-echo "|  If colors look off, run:                          |"
+echo "|  For hardware gamma correction (deeper blacks):    |"
+echo "|    sudo pacman -S argyllcms                        |"
+echo "|    dispwin -d 0 profiles/cal/cse_200nits_amd.cal   |"
+echo "|                                                    |"
+echo "|  To remove:                                        |"
 echo "|    bash tools/remove-profile.sh                    |"
-echo "|  to restore the default sRGB profile.              |"
 echo "+----------------------------------------------------+"
 echo ""

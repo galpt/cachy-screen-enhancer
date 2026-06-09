@@ -12,11 +12,11 @@ Yeah, that's not your eyes playing tricks.
 
 The thing is, your screen expects colors to follow a certain curve — it's called **gamma 2.2**, and it's been the standard for computer displays for like forever. But most Linux desktops (including KDE) send colors using a slightly different curve called **sRGB**. It's not *broken*, but it makes everything look a bit lighter than it should be, especially in darker areas.
 
-This project fixes that. It creates a color profile that tells your graphics card "hey, convert the signal to the curve your screen actually expects." One conversion. Nothing else changes. Just deeper blacks, better shadow detail, and colors that look the way they were meant to.
+This project fixes that. It creates a color profile that describes your screen to color-aware applications — web browsers, photo editors, media players. When an app knows your screen's exact color response, it can show you the colors the creator intended.
 
-And the best part? **You don't need to know what any of that means.** Just run one command and you're done.
+For the gamma correction to actually change the hardware behavior, you need **ArgyllCMS** (recommended) or xcalib to apply the VCGT LUT directly to the GPU. The ICC profile tells apps what your screen can do; the gamma LUT makes the hardware do it.
 
-> **One command. Better colors. Seriously.**
+> **ICC profile + ArgyllCMS gamma correction = deeper blacks, better shadows.**
 
 ---
 
