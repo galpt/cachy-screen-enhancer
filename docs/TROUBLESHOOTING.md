@@ -2,10 +2,12 @@
 
 > Common issues and how to fix them.
 
-**Before running any commands below, cd into the codebase directory first:**
+**Before running any commands below, clone the repo and cd into it:**
 ```bash
-cd cachy-screen-enhancer/cachy-screen-enhancer-codebase
+git clone https://github.com/galpt/cachy-screen-enhancer.git
+cd cachy-screen-enhancer
 ```
+All paths below are relative to the repo root (where `safe-install.sh` lives).
 
 ---
 
