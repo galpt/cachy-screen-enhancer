@@ -178,22 +178,24 @@ else
 fi
 
 echo ""
-echo "Selected profile: $PROFILE_NAME"
-echo ""
 echo "+----------------------------------------------------+"
 echo "|  All done!                                         |"
 echo "|                                                    |"
 if [ "$DISPWIN_OK" = "yes" ]; then
-    echo "|  ✓ Gamma correction applied                       |"
-    echo "|  ✓ ICC profile installed                          |"
+    echo "|  + Gamma correction via dispwin                    |"
+    echo "|  + ICC profile installed                           |"
 else
-    echo "|  ✓ ICC profile installed                          |"
-    echo "|                                                    |"
-    echo "|  To apply gamma correction manually:              |"
-    echo "|    dispwin -d 1 profiles/cal/$(basename "$CAL_FILE" .cal).cal  |"
+    echo "|  + ICC profile installed                           |"
 fi
 echo "|                                                    |"
 echo "|  To remove:                                        |"
 echo "|    bash tools/remove-profile.sh                    |"
 echo "+----------------------------------------------------+"
+echo ""
+echo "Selected profile: $PROFILE_NAME"
+if [ "$DISPWIN_OK" != "yes" ]; then
+    echo ""
+    echo "Manual gamma correction (if needed):"
+    echo "  dispwin -d 1 $CAL_FILE"
+fi
 echo ""
