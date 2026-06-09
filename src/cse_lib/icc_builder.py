@@ -57,32 +57,43 @@ _M_BRAD: List[List[float]] = [
 
 def build_icc_profile(
     desc_text: str,
-    vcgt_lut: List[float],
-    white_level: float,
+    vcgt_lut: Optional[List[float]] = None,
+    white_level: float = 200.0,
     edid_data: Optional[Dict[str, object]] = None,
     gamma: float = 2.2,
+    include_vcgt: bool = False,
 ) -> bytes:
     """Build a complete ICC v4 display profile.
+
+    By default, this creates a standard display description profile (no VCGT
+    tag) suitable for Linux/KDE color management. When *include_vcgt* is
+    ``True``, a ``vcgt`` tag is embedded for direct GPU LUT manipulation
+    (Windows MHC2-style).
 
     Args:
         desc_text: Description string for the ``desc`` tag (e.g.
             ``"cachy-screen-enhancer: sRGB → gamma 2.2 @ 200nits [AMD]"``).
         vcgt_lut: 256-entry 1D LUT from :func:`vcgt_builder.build_vcgt_amd`
-            or equivalent.
+            or equivalent. Required if *include_vcgt* is ``True``.
         white_level: SDR white luminance in nits (used for the ``lumi`` tag).
         edid_data: Optional dictionary from :func:`edid_parser.edid_summary`.
             If provided, the profile uses EDID white point and primaries.
             If ``None``, sRGB defaults are used.
         gamma: Target gamma exponent (default 2.2).
+        include_vcgt: Whether to embed a ``vcgt`` tag for hardware LUT
+            correction (default ``False``). On Linux, the ICC profile should
+            describe the display, not correct it — use ``xcalib`` or
+            ``dispwin`` with a separate ``.cal`` file for hardware correction.
 
     Returns:
         Complete ICC v4 profile as ``bytes``.
 
     Raises:
-        ValueError: If *vcgt_lut* does not have exactly 256 entries.
+        ValueError: If *include_vcgt* is ``True`` but *vcgt_lut* is not
+            a 256-element list.
     """
-    if len(vcgt_lut) != 256:
-        raise ValueError(f"vcgt_lut must have 256 entries, got {len(vcgt_lut)}.")
+    if include_vcgt and (not vcgt_lut or len(vcgt_lut) != 256):
+        raise ValueError("vcgt_lut must have 256 entries when include_vcgt=True.")
 
     # ------------------------------------------------------------------
     # Resolve chromaticity data
@@ -182,9 +193,10 @@ def build_icc_profile(
     )
     tag_data.append(("lumi", lumi_bytes))
 
-    # vcgt (proprietary VCGT tag)
-    vcgt_bytes = vcgt_to_icc_tag(vcgt_lut)
-    tag_data.append(("vcgt", vcgt_bytes))
+    # vcgt (proprietary VCGT tag — only when requested)
+    if include_vcgt and vcgt_lut is not None:
+        vcgt_bytes = vcgt_to_icc_tag(vcgt_lut)
+        tag_data.append(("vcgt", vcgt_bytes))
 
     # ------------------------------------------------------------------
     # Layout calculation

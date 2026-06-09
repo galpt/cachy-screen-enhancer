@@ -35,7 +35,7 @@ MAX_LUMINANCE = 480
 LUMINANCE_STEP = 10
 
 
-def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, edid_path=None):
+def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, edid_path=None, with_vcgt=False):
     """Build a single ICC profile and write it to disk.
 
     Returns the path of the written file.
@@ -47,7 +47,7 @@ def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, 
     else:
         vcgt_func = build_vcgt_generic
 
-    # Determine native gamma for VCGT computation (from EDID if available)
+    # Determine native gamma from EDID if available
     native_gamma = 2.2
     edid_data = None
     if edid_path:
@@ -58,6 +58,7 @@ def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, 
         except Exception:
             pass
 
+    # Compute VCGT LUT (needed for xcalib/dispwin even if not embedded in ICC)
     lut = vcgt_func(
         white_level=white_level, gamma=gamma,
         black_level=black_level, native_gamma=native_gamma,
@@ -68,6 +69,7 @@ def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, 
         white_level=white_level,
         gamma=gamma,
         edid_data=edid_data,
+        include_vcgt=with_vcgt,
     )
 
     output_path = Path(output_path)
@@ -99,7 +101,7 @@ def build_cal(white_level, gamma, gpu_method, output_path, black_level=0.0):
     return str(output_path)
 
 
-def generate_all(output_dir, gpu_method, gamma, black_level, cal_only, edid_path=None):
+def generate_all(output_dir, gpu_method, gamma, black_level, cal_only, edid_path=None, with_vcgt=False):
     """Generate profiles for all standard luminance levels."""
     output_dir = Path(output_dir)
     results = []
@@ -113,7 +115,7 @@ def generate_all(output_dir, gpu_method, gamma, black_level, cal_only, edid_path
         else:
             out_name = f"cse_{wl}nits_{method}.icc"
             out_path = output_dir / out_name
-            path = build_profile(wl, gamma, method, out_path, black_level, edid_path=edid_path)
+            path = build_profile(wl, gamma, method, out_path, black_level, edid_path=edid_path, with_vcgt=with_vcgt)
         results.append(path)
         print(f"  ✓ {path}")
 
@@ -190,6 +192,11 @@ def parse_args(argv=None):
         "--cal-only", action="store_true",
         help="Generate .cal dispwin/gputool files instead of .icc profiles",
     )
+    parser.add_argument(
+        "--with-vcgt", action="store_true",
+        help="Embed VCGT gamma LUT in ICC profile (Windows MHC2-style). "
+             "By default the profile describes the display without hardware correction;",
+    )
 
     return parser.parse_args(argv)
 
@@ -253,7 +260,7 @@ def main():
     if args.all:
         print(f"Generating {len(ALL_LUMINANCE_LEVELS)} profiles (method: {gpu_method}, gamma: {args.gamma})")
         print(f"Output directory: {output_dir.resolve()}")
-        generate_all(output_dir, gpu_method, args.gamma, args.black_level, args.cal_only, edid_path=args.edid)
+        generate_all(output_dir, gpu_method, args.gamma, args.black_level, args.cal_only, edid_path=args.edid, with_vcgt=args.with_vcgt)
 
     # --- SINGLE PROFILE MODE ---
     if args.white_level is None:
@@ -279,7 +286,7 @@ def main():
         path = build_cal(wl, args.gamma, gpu_method, out_path, args.black_level)
         print(f"  ✓ {path}")
     else:
-        path = build_profile(wl, args.gamma, gpu_method, out_path, args.black_level, edid_path=args.edid)
+        path = build_profile(wl, args.gamma, gpu_method, out_path, args.black_level, edid_path=args.edid, with_vcgt=args.with_vcgt)
         print(f"  ✓ {path}")
 
 

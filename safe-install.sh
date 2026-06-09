@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="$SCRIPT_DIR/profiles/icc"
 
 # ── Dependency self-bootstrap ─────────────────────────────────
-REQUIRES=("colord")  # EDID parsing is done via the bundled Python module
+REQUIRES=("colord")  # VCGT correction is embedded in the ICC profile
 MISSING=()
 for pkg in "${REQUIRES[@]}"; do
     if ! pacman -Qi "$pkg" &>/dev/null; then
@@ -101,22 +101,27 @@ echo "[*] Generating profile for your hardware..."
 OUTPUT_DIR="$SCRIPT_DIR/output"
 mkdir -p "$OUTPUT_DIR"
 
-GEN_ARGS="--white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR"
-[ -n "$EDID_PATH" ] && GEN_ARGS="$GEN_ARGS --edid $EDID_PATH"
-
+# Generate ICC profile with VCGT hardware correction (for KWin Wayland)
+GEN_ARGS="--white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR --with-vcgt"
 python3 "$SCRIPT_DIR/src/cse-gen.py" $GEN_ARGS 2>&1 || true
 
 BEST_FILE="$OUTPUT_DIR/cse_${WL}nits_${GPU_METHOD}.icc"
+CAL_FILE="$OUTPUT_DIR/cse_${WL}nits_${GPU_METHOD}.cal"
+
+# Also generate a .cal file (for fallback application methods)
+python3 "$SCRIPT_DIR/src/cse-gen.py" --cal-only --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR 2>&1 || true
 
 # If generation failed, fall back to prebuilt profiles
 if [ ! -f "$BEST_FILE" ]; then
     echo "    ⚠ Profile generation failed. Falling back to prebuilt profiles."
     BEST_FILE="$PROFILES_DIR/cse_${WL}nits_${GPU_METHOD}.icc"
+    CAL_FILE="$PROFILES_DIR/cse_${WL}nits_amd.cal"
     if [ ! -f "$BEST_FILE" ]; then
         BEST_FILE="$PROFILES_DIR/cse_${WL}nits_amd.icc"
     fi
     if [ ! -f "$BEST_FILE" ]; then
         BEST_FILE="$PROFILES_DIR/cse_200nits_amd.icc"
+        CAL_FILE="$PROFILES_DIR/cse_200nits_amd.cal"
     fi
 fi
 
@@ -129,8 +134,8 @@ PROFILE_NAME="$(basename "$BEST_FILE")"
 echo "    → Profile: $PROFILE_NAME"
 echo ""
 
-# ── Step 6: Install via colord ────────────────────────────────
-echo "[*] Installing profile via colord..."
+# ── Step 6: Register ICC profile with colord ─────────────────
+echo "[*] Installing ICC profile via colord (gamma correction embedded as VCGT)..."
 
 # Ensure colord is running
 if ! systemctl is-active --quiet colord 2>/dev/null; then
@@ -142,44 +147,28 @@ if ! systemctl is-active --quiet colord 2>/dev/null; then
     done
 fi
 
-# Method A: copy profile to system directory and import via colormgr
 COLORD_DIR="/usr/share/color/icc/colord"
 sudo mkdir -p "$COLORD_DIR"
 sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
 
-PROFILE_ID=""
-# Method B: colormgr import-profile (handles colord database registration)
-echo "    → Registering profile with colord..."
 PROFILE_ID=$(colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
-
-# Method C: if import-profile didn't return an ID, try add-profile
-if [ -z "$PROFILE_ID" ]; then
-    PROFILE_ID=$(colormgr add-profile "$BEST_FILE" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
-fi
+[ -z "$PROFILE_ID" ] && PROFILE_ID=$(colormgr add-profile "$BEST_FILE" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
 
 if [ -z "$PROFILE_ID" ]; then
-    echo "    ⚠ Could not register with colord."
-    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME"
-    echo "    → Open KDE System Settings → Color Management → Add → Browse"
-    echo "    → Select: $COLORD_DIR/$PROFILE_NAME"
-    echo ""
-    echo "╔══════════════════════════════════════════════════╗"
-    echo "║  Profile copied to system directory.             ║"
-    echo "║  Manual step needed (see above).                 ║"
-    echo "╚══════════════════════════════════════════════════╝"
-    exit 0
-fi
-
-echo "    → Registered: $PROFILE_ID"
-
-# Get device ID and set as default
-DEVICE_ID=$(colormgr get-devices 2>&1 | grep -B1 "$CONNECTOR" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
-[ -z "$DEVICE_ID" ] && DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
-
-if [ -n "$DEVICE_ID" ]; then
-    colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
-    colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
-    echo "    → Set as default for $DEVICE_ID"
+    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME (not registered with colord)"
+    echo "    → To register manually:"
+    echo "      CachyOS: System Settings → Display & Monitor → Display Configuration → Color profile"
+    echo "      Other:   KDE System Settings → Color Management"
+else
+    echo "    → Registered: $PROFILE_ID"
+    # Set as default
+    DEVICE_ID=$(colormgr get-devices 2>&1 | grep -B1 "$CONNECTOR" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+    [ -z "$DEVICE_ID" ] && DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+    if [ -n "$DEVICE_ID" ]; then
+        colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
+        colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
+        echo "    → Set as default for $DEVICE_ID"
+    fi
 fi
 
 echo ""
