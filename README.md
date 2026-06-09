@@ -50,7 +50,7 @@ bash safe-install.sh
 Here's what happens when you run it:
 
 1. It asks for your sudo password **once** (and keeps the session alive so it won't keep bugging you)
-2. It auto-installs `colord` (for profile management) and `argyllcms` (for dispwin gamma LUT) if missing
+2. It auto-installs `python`, `colord`, and `argyllcms` if missing
 3. It figures out what GPU you have (AMD / NVIDIA / generic)
 4. It finds your display, reads its EDID, and detects your current brightness level
 5. It generates a custom ICC profile (with accurate TRC and white point) and a `.cal` gamma LUT

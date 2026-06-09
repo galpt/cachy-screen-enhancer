@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="$SCRIPT_DIR/profiles/icc"
 
 # ── Dependency self-bootstrap ─────────────────────────────────
-REQUIRES=("colord" "argyllcms")  # colord for ICC registration, argyllcms for dispwin gamma LUT
+REQUIRES=("python" "colord" "argyllcms")  # python for profile generation + detection
 MISSING=()
 for pkg in "${REQUIRES[@]}"; do
     if ! pacman -Qi "$pkg" &>/dev/null; then

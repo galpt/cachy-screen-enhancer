@@ -18,7 +18,7 @@ DEFAULT_PROFILE="$SCRIPT_DIR/profiles/icc/cse_200nits_amd.icc"
 PROFILE="${1:-$DEFAULT_PROFILE}"
 
 # ── Dependency self-bootstrap ─────────────────────────────────
-REQUIRES=("colord")
+REQUIRES=("python" "colord")
 MISSING=()
 for pkg in "${REQUIRES[@]}"; do
     if ! pacman -Qi "$pkg" &>/dev/null; then

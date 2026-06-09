@@ -21,7 +21,7 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" 2>/dev/null || exit; done 2>
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ── Dependency self-bootstrap ─────────────────────────────────
-REQUIRES=("colord" "argyllcms")  # argyllcms for dispwin -c
+REQUIRES=("python" "colord" "argyllcms")  # python for colormgr parsing, argyllcms for dispwin -c
 MISSING=()
 for pkg in "${REQUIRES[@]}"; do
     if ! pacman -Qi "$pkg" &>/dev/null; then
