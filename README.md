@@ -300,7 +300,7 @@ Same as the tree above in "I want to customize things." Key directories at a gla
 
 ## Inspired by
 
-This project is a Linux-native evolution of **[win11hdr-srgb-to-gamma2.2-icm](https://github.com/dylanraga/win11hdr-srgb-to-gamma2.2-icm)** by [dylanraga](https://github.com/dylanraga). That project created MHC2 color profiles for Windows 11 HDR mode to fix the sRGB-to-gamma 2.2 mismatch. We adapted the same core idea to the Linux color management stack (colord, KWin, Wayland) and rebuilt it from the ground up with EDID-aware hardware detection, self-bootstrapping scripts, and automated GPU gamma LUT correction.
+This project is basically the Linux version of **[win11hdr-srgb-to-gamma2.2-icm](https://github.com/dylanraga/win11hdr-srgb-to-gamma2.2-icm)** by [dylanraga](https://github.com/dylanraga). That one made color profiles for Windows 11 HDR mode to fix the same sRGB vs gamma 2.2 thing. We took the same idea and made it work on Linux — colord, KDE, Wayland, the whole stack — with auto-detection of your hardware and one-command setup.
 
 ---
 
