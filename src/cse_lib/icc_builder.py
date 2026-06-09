@@ -354,21 +354,31 @@ def validate_icc_profile(icc_bytes: bytes) -> bool:
 # ---------------------------------------------------------------------------
 
 def _build_text_description(text: str) -> bytes:
-    """Build a ``textDescriptionType`` tag (ICC v4 format).
+    """Build a ``multiLocalizedUnicodeType`` tag for the profile description.
 
-    ICC v4 layout:
-        bytes 0-3:   ``desc`` signature
+    lcms2 requires v4 profiles to use ``mluc`` (multi-localized Unicode)
+    format, not the older v2 ``textDescriptionType``. colord rejects
+    profiles without a valid mluc description tag with:
+    ``CdIccStore: failed to add profile: cmsSigProfile*Tag missing``
+
+    Layout:
+        bytes 0-3:   ``'mluc'`` signature
         bytes 4-7:   reserved (0)
-        bytes 8-9:   ISO 639-1 language code (``b'en'`` for English)
-        bytes 10-11: ISO 3166 country code (``b'US'``)
-        bytes 12+:   null-terminated ASCII text, padded to 4 bytes
+        bytes 8-11:  number of records (1)
+        bytes 12-15: record size (12 bytes per record)
+        bytes 16-27: record 1: ``en`` (2) + ``US`` (2) + length (4) + offset (4)
+        bytes 28+:   UTF-16BE encoded text, null-terminated, padded to 4 bytes
     """
-    ascii_text = text.encode("ascii", errors="replace") + b"\x00"
+    # Encode as UTF-16BE with null terminator
+    utf16 = text.encode("utf-16be") + b"\x00\x00"
     # Pad to 4-byte boundary
-    while len(ascii_text) % 4 != 0:
-        ascii_text += b"\x00"
-    header = struct.pack(">4sI2s2s", b"desc", 0, b"en", b"US")
-    return header + ascii_text
+    while len(utf16) % 4 != 0:
+        utf16 += b"\x00"
+    # mluc header: signature(4) + reserved(4) + record_count(4) + record_size(4)
+    header = struct.pack(">4sIII", b"mluc", 0, 1, 12)
+    # Single record: language(2) + country(2) + length(4) + offset(4)
+    record = struct.pack(">2s2sII", b"en", b"US", len(utf16), 0)
+    return header + record + utf16
 
 
 def _build_xyz_type(x: float, y: float, z: float) -> bytes:
