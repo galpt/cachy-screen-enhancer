@@ -17,6 +17,7 @@ from typing import Dict, List, Optional
 
 _VENDOR_AMD: str = "0x1002"
 _VENDOR_NVIDIA: str = "0x10de"
+_VENDOR_INTEL: str = "0x8086"
 
 
 # ---------------------------------------------------------------------------
@@ -30,19 +31,22 @@ def detect_gpu_method() -> str:
     1. Iterate ``/sys/class/drm/card*/device/vendor``.
     2. For each card that has at least one connected connector, read the
        vendor file.
-    3. If vendor is AMD (0x1002): return ``"amd"``.
-    4. If vendor is NVIDIA (0x10de): return ``"nvidia"``.
-    5. If no GPU found via DRM, check for ``/dev/nvidia0`` (NVIDIA).
-    6. Fallback: ``"generic"``.
+    3. If vendor is AMD (0x1002): return ``"amd"`` (KMS gamma LUT path).
+    4. If vendor is Intel (0x8086): return ``"amd"`` (Intel uses the same
+       KMS DRM gamma LUT interface as AMD — no PQ encoding like NVIDIA).
+    5. If vendor is NVIDIA (0x10de): return ``"nvidia"`` (proprietary
+       driver may apply PQ encoding before gamma LUT on HDR setups).
+    6. If no GPU found via DRM, check for ``/dev/nvidia0`` (NVIDIA).
+    7. Fallback: ``"generic"``.
 
     Returns:
         One of ``"amd"``, ``"nvidia"``, or ``"generic"``.
     """
     connected_cards = _get_vendors_of_connected_cards()
 
-    # AMD check
+    # AMD / Intel check — both use the same KMS DRM gamma LUT path
     for vendor in connected_cards:
-        if vendor == _VENDOR_AMD:
+        if vendor in (_VENDOR_AMD, _VENDOR_INTEL):
             return "amd"
 
     # NVIDIA check via DRM
