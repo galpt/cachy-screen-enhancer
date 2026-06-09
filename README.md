@@ -300,7 +300,13 @@ Same as the tree above in "I want to customize things." Key directories at a gla
 
 ## Inspired by
 
-This project is basically the Linux version of **[win11hdr-srgb-to-gamma2.2-icm](https://github.com/dylanraga/win11hdr-srgb-to-gamma2.2-icm)** by [dylanraga](https://github.com/dylanraga). That one made color profiles for Windows 11 HDR mode to fix the same sRGB vs gamma 2.2 thing. We took the same idea and made it work on Linux — colord, KDE, Wayland, the whole stack — with auto-detection of your hardware and one-command setup.
+This project is based on the same idea as **[win11hdr-srgb-to-gamma2.2-icm](https://github.com/dylanraga/win11hdr-srgb-to-gamma2.2-icm)** by [dylanraga](https://github.com/dylanraga) — that one created color profiles for Windows 11 HDR mode. Ours is built for Linux from the ground up:
+
+- **No manual file picking** — detects your GPU, reads your display's EDID, picks the right brightness level automatically
+- **Self-bootstrapping** — installs everything it needs (Python, colord, ArgyllCMS) without you lifting a finger
+- **Hardware-verified** — reads back the GPU gamma LUT to confirm the correction actually took effect (not just "trust the math")
+- **Works on KDE Wayland** — sets the profile via `kscreen-doctor` so the GUI shows it, not just the config file
+- **One command to undo** — `bash tools/remove-profile.sh` reverses everything
 
 ---
 
