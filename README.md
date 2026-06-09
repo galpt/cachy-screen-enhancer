@@ -96,7 +96,7 @@ And then you get a nice summary like this:
 Selected profile: cse_200nits_amd.icc
 ```
 
-That's it. The gamma correction is already active on your display (via dispwin), and the ICC profile is set directly in KWin's output configuration. If something looks off, undo everything:
+That's it. The gamma correction is already active on your display (via dispwin), and the ICC profile is set via `kscreen-doctor` — the proper KDE API. If something looks off, undo everything:
 
 ```bash
 bash tools/remove-profile.sh

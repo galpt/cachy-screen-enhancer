@@ -23,14 +23,14 @@ The linear toe in sRGB makes values below ~0.04 linear luminance **lighter** tha
 ```mermaid
 flowchart LR
     PIXEL["Input pixel (sRGB-encoded)"]
-    INV["Inverse sRGB EOTF (linearize)"]
-    GAMMA["Apply target gamma ratio"]
-    OUT["Re-encode via output EOTF (native panel)"]
+    INV["sRGB EOTF (to linear luminance)"]
+    GAMMA["Encode for display: linear^(1/gamma)"]
+    OUT["Display applies native gamma"]
 
     PIXEL --> INV --> GAMMA --> OUT
 ```
 
-The correction is a ratio: `gamma_target / gamma_native`. Since the LEN156FHD panel reports gamma 2.20 in EDID and we target 2.2, the ratio is ~1.0 — meaning the correction is subtle. For panels with different native gammas, the adjustment scales accordingly.
+The correction is: `V_out = srgbEotf(V_in) ^ (1 / native_gamma)`. This converts sRGB-encoded input to the gamma-encoded value needed by the display, producing an end-to-end linear system — the display reproduces the exact luminance intended by the sRGB content.
 
 ## The fix: ICC profiles with VCGT
 
@@ -46,7 +46,7 @@ Every generated profile is a valid **ICC v4.2** (`mntr` device class, `RGB ` col
 |---|---|---|
 | `desc` | Description | "cachy-screen-enhancer: sRGB → gamma 2.2 @ 200nits [AMD]" |
 | `cprt` | Copyright | BSD 3-Clause notice |
-| `wtpt` | White point | D65 (or EDID-reported white point) adapted to D50 |
+| `wtpt` | White point | D50 (0.9642, 1.0, 0.8249) per ICC spec |
 | `chad` | Chromatic adaptation | Bradford D65→D50 matrix |
 | `rXYZ`/`gXYZ`/`bXYZ` | Colorant matrix | RGB → XYZ primaries (from EDID or sRGB defaults) |
 | `rTRC`/`gTRC`/`bTRC` | Tone reproduction curve | Parametric gamma curve |
@@ -75,15 +75,15 @@ Each entry: `round(lut[i] × 65535)` as unsigned 16-bit big-endian.
 The AMD GPU driver (via `amdgpu` kernel module + Mesa) applies VCGT in linear space. The correction LUT is:
 
 ```python
-def build_vcgt_amd(white_level, gamma, native_gamma):
-    for i in range(256):
-        v = i / 255
-        L_linear = srgb_eotf_inverse(v)  # linearize sRGB
-        L_corrected = L_linear ** (gamma / native_gamma)
-        table[i] = L_corrected
+def vcgt_entry(v, native_gamma):
+    return srgb_eotf(v) ** (1.0 / native_gamma)
 ```
 
-The `gamma / native_gamma` ratio means if native gamma equals target gamma, the correction is essentially flat.
+For each input value `v` (sRGB-encoded), the pipeline is:
+1. `srgbEotf(v)` converts from sRGB encoding to linear luminance
+2. `linear ** (1 / native_gamma)` converts linear to gamma-encoded for the display
+
+The display then applies its native gamma: `L = V_out ^ native_gamma = srgbEotf(v)`. This means the system reproduces the exact linear luminance intended by the sRGB content — no ratio needed.
 
 ### NVIDIA path (code complete, unvalidated)
 
