@@ -1,0 +1,23 @@
+[project]
+name = "cachy-screen-enhancer"
+version = "1.0.0"
+description = "ICC color profiles that correct sRGB to pure gamma 2.2 for CachyOS/Linux"
+authors = [
+    { name = "Galih Tama", email = "galpt@v.recipes" },
+]
+license = { text = "BSD 3-Clause" }
+requires-python = ">=3.11"
+dependencies = []
+optional-dependencies = {
+    dev = ["pytest", "pytest-cov"],
+}
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[project.scripts]
+cse-gen = "src.cse_gen:main"
