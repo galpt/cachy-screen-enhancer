@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="$SCRIPT_DIR/profiles/icc"
 
 # ── Dependency self-bootstrap ─────────────────────────────────
-REQUIRES=("colord")  # VCGT correction is embedded in the ICC profile
+REQUIRES=("colord" "argyllcms")  # colord for ICC registration, argyllcms for dispwin gamma LUT
 MISSING=()
 for pkg in "${REQUIRES[@]}"; do
     if ! pacman -Qi "$pkg" &>/dev/null; then
@@ -143,9 +143,6 @@ if command -v dispwin &>/dev/null; then
     else
         echo "    ⚠ No .cal file at $CAL_FILE"
     fi
-else
-    echo "    → Install argyllcms for hardware gamma correction:"
-    echo "      sudo pacman -S argyllcms"
 fi
 echo ""
 
