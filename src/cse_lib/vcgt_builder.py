@@ -12,6 +12,7 @@ import struct
 from typing import List, Optional
 
 from .gamma_math import (
+    srgb_eotf,
     srgb_eotf_inverse,
     pq_eotf,
     pq_eotf_inverse,
@@ -30,30 +31,33 @@ def build_vcgt_amd(
 ) -> List[float]:
     """Compute a 256-entry gamma LUT for the AMD GPU path.
 
-    The AMD driver applies the VCGT in linear space after the compositor
-    has decoded sRGB pixel values.  The correction applies a pure-gamma
-    remap with the ratio ``gamma / native_gamma``.
+    The VCGT maps sRGB-encoded compositor output to gamma-encoded values
+    expected by the display.  The formula for each entry is::
+
+        V_out = srgbEotf(V_in) ^ (1 / display_native_gamma)
+
+    which produces an end-to-end linear system — the display reproduces
+    the exact linear luminance intended by the sRGB-encoded content.
 
     Args:
-        white_level: SDR white luminance in nits (used for range, not
-            directly in computation for the AMD path).
-        gamma: Target gamma exponent (default 2.2).
-        black_level: Black floor luminance in nits (default 0.0).
+        white_level: SDR white luminance in nits (unused in AMD path).
+        gamma: Target system gamma (default 2.2, kept for API compat;
+            the actual correction is always 1/native_gamma).
+        black_level: Black floor luminance in nits (unused in AMD path).
         native_gamma: Display's native gamma from EDID (default 2.2).
 
     Returns:
         List of 256 floats in [0, 1] representing the LUT.
     """
-    ratio = gamma / native_gamma
+    inv_gamma = 1.0 / native_gamma
     table: List[float] = [0.0] * 256
 
     for i in range(256):
         v = i / 255.0
-        # Linearize: assume input is sRGB-encoded
-        L_linear = srgb_eotf_inverse(v)
-        # Apply target gamma ratio
-        L_corrected = L_linear ** ratio
-        table[i] = L_corrected
+        # sRGB-encoded → linear luminance
+        L_linear = srgb_eotf(v)
+        # linear → gamma-encoded for display
+        table[i] = L_linear ** inv_gamma
 
     return table
 

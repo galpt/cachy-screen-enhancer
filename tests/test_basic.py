@@ -50,6 +50,14 @@ def test_vcgt_amd():
     assert len(lut) == 256
     assert abs(lut[0]) < 1e-10  # first entry should be ~0
     assert abs(lut[255] - 1.0) < 1e-4  # last entry should be ~1
+    # Verify the VCGT mapping is correct: sRGB→linear→gamma encode
+    # For v=128 (mid-gray sRGB), the correct output is srgbEotf(v)^(1/2.2)
+    # This should be ~0.498, NOT 0.737 (the old inverted result).
+    assert abs(lut[128] - 0.498) < 0.005, (
+        f"VCGT[128] = {lut[128]:.4f}, expected ~0.498. "
+        "The VCGT mapping was inverted — srgb_eotf_inverse was used "
+        "instead of srgb_eotf."
+    )
 
 
 def test_vcgt_tag():
