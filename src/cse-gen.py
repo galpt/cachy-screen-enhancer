@@ -59,10 +59,17 @@ def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, 
             pass
 
     # Compute VCGT LUT (needed for dispwin even if not embedded in ICC)
-    lut = vcgt_func(
-        white_level=white_level, gamma=gamma,
-        black_level=black_level, native_gamma=native_gamma,
-    )
+    # Only AMD path uses native_gamma; NVIDIA and generic paths don't.
+    if gpu_method == "amd":
+        lut = vcgt_func(
+            white_level=white_level, gamma=gamma,
+            black_level=black_level, native_gamma=native_gamma,
+        )
+    else:
+        lut = vcgt_func(
+            white_level=white_level, gamma=gamma,
+            black_level=black_level,
+        )
     icc_data = build_icc_profile(
         desc_text=f"cse_{white_level}nits_{gpu_method}",
         vcgt_lut=lut,
