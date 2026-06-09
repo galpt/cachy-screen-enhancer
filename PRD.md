@@ -818,7 +818,7 @@ Then the brightness table (same content as before, same conversational style):
 | `cse_400nits_amd.icc` | Very high | Outdoors or very bright environment |
 | `cse_480nits_amd.icc` | Maximum | Screen brightness maxed out, full daylight |
 
-Then the slider-position lookup table and installation steps (KDE System Settings → Color Management).
+Then the slider-position lookup table and installation steps (Settings → Display & Monitor → Display Configuration → Color profile on CachyOS, or KDE System Settings → Color Management on other distros).
 
 **README §5 — So, what did that actually do?**
 

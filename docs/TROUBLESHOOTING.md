@@ -15,7 +15,7 @@ All paths below are relative to the repo root (where `safe-install.sh` lives).
 
 **You installed the profile but colors look the same.**
 
-- Open **KDE System Settings → Color Management** and check if the profile is listed and marked as **Default**. If not, select it and click "Set as Default Profile".
+- Open **Settings → Display & Monitor → Display Configuration → Color profile** and check if the profile is listed and marked as **Default**. If not, select it and click "Set as Default Profile".
 - If using the manual method, make sure you checked **"Add as HDR Profile"** when importing.
 - Re-run `bash safe-install.sh` — it'll re-detect everything and re-apply.
 
@@ -42,7 +42,7 @@ After=sleep.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /path/to/cachy-screen-enhancer-codebase/safe-install.sh
+ExecStart=/bin/bash /path/to/cachy-screen-enhancer/safe-install.sh
 User=galpt
 
 [Install]
