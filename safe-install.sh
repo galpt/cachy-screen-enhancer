@@ -226,13 +226,10 @@ else:
     print(f'    → Could not find output {connector} in KWin config')
 " 2>&1
 
-    # Notify KWin to reload the config (KWin watches this file, but
-    # a D-Bus signal ensures it picks up the change immediately)
-    if command -v qdbus &>/dev/null; then
-        qdbus org.kde.KWin /KWin reloadConfig 2>/dev/null || true
-        qdbus org.kde.KWin /KWin reconfigure 2>/dev/null || true
-    fi
-    echo "    → KWin will use the new ICC profile"
+    # Notify KWin to reload the config
+    dbus-send --session --dest=org.kde.KWin --type=method_call \
+        /KWin org.kde.KWin.reconfigure &>/dev/null || true
+    echo "    → KWin reconfigured to use the new ICC profile"
 else
     echo "    → KWin config not found at $KWIN_CONFIG"
     echo "    → Open System Settings → Display & Monitor → Display Configuration"
