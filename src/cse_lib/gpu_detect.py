@@ -44,7 +44,10 @@ def detect_gpu_method() -> str:
     """
     connected_cards = _get_vendors_of_connected_cards()
 
-    # AMD / Intel check — both use the same KMS DRM gamma LUT path
+    # AMD / Intel check — both use the same KMS DRM GAMMA_LUT property
+    # (standard DRM atomic KMS interface, no proprietary PQ encoding).
+    # The "amd" method name means "standard KMS gamma LUT computation" —
+    # correct for any GPU that exposes GAMMA_LUT through the DRM atomic API.
     for vendor in connected_cards:
         if vendor in (_VENDOR_AMD, _VENDOR_INTEL):
             return "amd"
