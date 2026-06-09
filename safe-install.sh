@@ -197,6 +197,8 @@ fi
 # Set the ICC profile directly in KWin's output configuration file.
 # KWin stores per-output settings in ~/.config/kwinoutputconfig.json,
 # including the iccProfilePath and colorProfileSource fields.
+# Note: $CONNECTOR is like "card2-eDP-1" but KWin uses "eDP-1" (no card prefix).
+KWIN_CONNECTOR="${CONNECTOR#card*-}"
 KWIN_CONFIG="$HOME/.config/kwinoutputconfig.json"
 if [ -f "$KWIN_CONFIG" ]; then
     python3 -c "
@@ -205,12 +207,12 @@ import json, sys
 with open('$KWIN_CONFIG') as f:
     config = json.load(f)
 
-# Find the eDP-1 output and set the ICC profile path
+connector = '$KWIN_CONNECTOR'
 changed = False
 for section in config:
     if section.get('name') == 'outputs':
         for output in section.get('data', []):
-            if output.get('connectorName') == '$CONNECTOR':
+            if output.get('connectorName') == connector:
                 output['colorProfileSource'] = 'ICC'
                 output['iccProfilePath'] = '$COLORD_SYS/$PROFILE_NAME'
                 changed = True
@@ -220,8 +222,8 @@ if changed:
     with open('$KWIN_CONFIG', 'w') as f:
         json.dump(config, f, indent=2)
     print('    → Applied to KWin output config')
-else:
-    print('    → Could not find output $CONNECTOR in KWin config')
+    else:
+        print(f'    → Could not find output {connector} in KWin config')
 " 2>&1
 
     # Notify KWin to reload the config (KWin watches this file, but
