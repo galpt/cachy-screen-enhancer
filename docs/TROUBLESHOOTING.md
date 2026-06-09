@@ -16,7 +16,7 @@ All paths below are relative to the repo root (where `safe-install.sh` lives).
 **You installed the profile but colors look the same.**
 
 - Open **Settings → Display & Monitor → Display Configuration → Color profile** and check if the profile is listed and marked as **Default**. If not, select it and click "Set as Default Profile".
-- If using the manual method, make sure you checked **"Add as HDR Profile"** when importing.
+- If using the manual method, make sure the profile is selected and set as default after importing.
 - Re-run `bash safe-install.sh` — it'll re-detect everything and re-apply.
 
 ## Profile resets after sleep / resume
@@ -56,14 +56,14 @@ sudo systemctl enable cse-resume.service
 
 **Option 3: Use dispwin instead of colord (more persistent)**
 ```bash
-# Install argyllcms first
-sudo pacman -S argyllcms
+# Run from the cachy-screen-enhancer directory
+cd cachy-screen-enhancer
 
-# Apply a .cal LUT directly
-dispwin -d 0 profiles/cal/cse_200nits_amd.cal
+# Apply a .cal LUT directly to display 1
+dispwin -d 1 profiles/cal/cse_200nits_amd.cal
 ```
 
-This bypasses colord entirely and writes directly to the GPU LUT.
+`dispwin` (from `argyllcms`, auto-installed by `safe-install.sh`) bypasses colord and writes directly to the GPU LUT via DRM KMS. Use `dispwin -d ?` to list available displays if index 1 is wrong.
 
 ## Blacks look crushed (too dark)
 

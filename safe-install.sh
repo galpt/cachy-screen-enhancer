@@ -148,7 +148,7 @@ if command -v dispwin &>/dev/null; then
             DISPWIN_OK="yes"
         else
             echo "    ⚠ dispwin failed. You can try:"
-            echo "      dispwin -d 1 profiles/cal/$(basename "$CAL_FILE")"
+            echo "      dispwin -d 1 \"$CAL_FILE\""
         fi
     else
         echo "    ⚠ No .cal file at $CAL_FILE"

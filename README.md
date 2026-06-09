@@ -12,11 +12,11 @@ Yeah, that's not your eyes playing tricks.
 
 The thing is, your screen expects colors to follow a certain curve — it's called **gamma 2.2**, and it's been the standard for computer displays for like forever. But most Linux desktops (including KDE) send colors using a slightly different curve called **sRGB**. It's not *broken*, but it makes everything look a bit lighter than it should be, especially in darker areas.
 
-This project fixes that. It creates a color profile that describes your screen to color-aware applications — web browsers, photo editors, media players. When an app knows your screen's exact color response, it can show you the colors the creator intended.
+This project fixes that. It creates a color profile that:
+- Tells color-aware apps (browsers, editors, media players) about your screen's color response
+- Applies a gamma correction LUT to your GPU, so the hardware actually shows deeper blacks
 
-For the gamma correction to actually change the hardware behavior, you need **ArgyllCMS** (recommended) or xcalib to apply the VCGT LUT directly to the GPU. The ICC profile tells apps what your screen can do; the gamma LUT makes the hardware do it.
-
-> **ICC profile + ArgyllCMS gamma correction = deeper blacks, better shadows.**
+The whole thing is automatic — one command detects your hardware, generates a custom profile, and installs everything.
 
 ---
 
@@ -50,12 +50,12 @@ bash safe-install.sh
 Here's what happens when you run it:
 
 1. It asks for your sudo password **once** (and keeps the session alive so it won't keep bugging you)
-2. It checks if you have the right tools installed (`colord`, etc.) and installs anything that's missing
-3. It figures out what GPU you have (AMD? NVIDIA? something else?)
-4. It finds your display, reads its EDID (fancy term for "the screen tells the computer what it's capable of")
-5. It checks your current brightness level
-6. It picks the best ICC profile for your exact setup
-7. It installs it and sets it as the default
+2. It auto-installs `colord` (for profile management) and `argyllcms` (for dispwin gamma LUT) if missing
+3. It figures out what GPU you have (AMD / NVIDIA / generic)
+4. It finds your display, reads its EDID, and detects your current brightness level
+5. It generates a custom ICC profile (with accurate TRC and white point) and a `.cal` gamma LUT
+6. It applies the gamma correction to your GPU via `dispwin` — this is what changes the blacks
+7. It copies the ICC profile to the system directory so color-aware apps can use it
 
 And then you get a nice summary like this:
 
@@ -65,25 +65,36 @@ And then you get a nice summary like this:
 +----------------------------------------------------+
 
 [*] Detecting GPU method...
-    → AMD Radeon 680M (method: amd)
-
+    → Method: amd
 [*] Detecting display...
-    → eDP-1: LEN156FHD (1920×1080 @ 120 Hz)
-
+    → Display: card2-eDP-1
 [*] Detecting brightness...
-    → ~53%
-    → Mapped luminance: 200 nits
+    → Brightness: ~42%
 
-[*] Selecting profile...
-    → cse_200nits_amd.icc
+[*] Generating profile for your hardware...
+  ✓ output/cse_200nits_amd.icc
+    → Profile: cse_200nits_amd.icc
 
-[*] Installing profile via colord...
-    → Added profile: icc-abc123
-    → Set as default for eDP-1
+[*] Applying gamma correction...
+    → dispwin display index: 1
+    → Gamma correction applied via dispwin
+
+[*] Installing ICC profile...
+    → Copied to /usr/share/color/icc/colord/cse_200nits_amd.icc
+    → Settings → Display & Monitor → Display Configuration → Color profile
+    → Select it as your color profile
 
 +----------------------------------------------------+
-|  Done! Your screen is now using gamma 2.2.         |
+|  All done!                                         |
+|                                                    |
+|  + Gamma correction via dispwin                    |
+|  + ICC profile installed                           |
+|                                                    |
+|  To remove:                                        |
+|    bash tools/remove-profile.sh                    |
 +----------------------------------------------------+
+
+Selected profile: cse_200nits_amd.icc
 ```
 
 That's it. Seriously. Go look at your screen — blacks should look deeper, shadows should have more detail. If something looks off, just run this to undo everything:
@@ -135,9 +146,8 @@ Open **KDE System Settings → Display → Brightness**. If your slider is rough
 1. Pick a file from `profiles/icc/` (use the tables above)
 2. Open **System Settings → Display & Monitor → Display Configuration → Color profile** (on CachyOS/KDE; other distros: **KDE System Settings → Color Management**)
 3. Click **"Add"** → **"Browse..."** → select the `.icc` file
-4. Check **"Add as HDR Profile"** → **"OK"**
-5. Select the profile and click **"Set as Default Profile"**
-6. Done
+4. Select the profile from the list and click **"Set as Default Profile"**
+5. Done
 
 Still unsure? Just pick `cse_200nits_amd.icc`. If the screen looks too dark (crushed shadows), switch to a higher number. If it looks slightly washed out, try a lower number. No harm in experimenting — switching profiles takes like 10 seconds.
 
@@ -202,12 +212,17 @@ cse-gen --white-level 200 --gamma 2.2 --gpu-method amd
 ```
 
 Parameters:
-- `--white-level`: SDR white luminance (80–480 nits)
-- `--gamma`: Target gamma power (default: 2.2)
-- `--gpu-method`: AMD, NVIDIA, generic, or auto (default: auto)
-- `--black-level`: Black floor compensation (default: 0.0)
-- `--output`: Custom output path
-- `--cal-only`: Generate .cal LUT files instead of .icc
+- `--all`: Generate all 7 luminance levels (80/100/120/200/300/400/480)
+- `--white-level N`: SDR white luminance (80–480 nits, step 10)
+- `--gamma G`: Target gamma power (default: 2.2)
+- `--gpu-method {amd,nvidia,generic,auto}`: GPU VCGT method (default: auto)
+- `--black-level B`: Black floor compensation (default: 0.0)
+- `--output FILE, -o FILE`: Output file path (auto-generated if not set)
+- `--output-dir DIR`: Output directory (default: ./output/)
+- `--edid PATH`: Path to EDID file for display-specific colorimetry
+- `--cal-only`: Generate `.cal` LUT files instead of `.icc`
+- `--report`: Print hardware detection report
+- `--verify FILE`: Validate an ICC profile
 
 ### Hardware report
 
@@ -251,12 +266,17 @@ Prints everything the tool detected about your system.
 │   └── verify.sh                Generate visual test patterns
 │
 ├── tests/                       Automated test suite
+│   ├── test_basic.py            9 sanity tests
+│   └── run_all.sh               One-command test runner
 ├── docs/                        Supplementary documentation
+│   ├── TROUBLESHOOTING.md       Common issues and fixes
+│   └── HOW_IT_WORKS.md          Technical deep-dive
 ├── data/edid/                   Reference EDID dumps
 ├── scripts/                     Automation helpers
 ├── output/                      Generated files (gitignored)
 │
 ├── pyproject.toml               Python project metadata
+├── .gitignore
 └── LICENSE                      BSD 3-Clause
 ```
 
@@ -266,40 +286,17 @@ Prints everything the tool detected about your system.
 
 Here's every file and directory in the project and what it's for.
 
-(See the tree above in "I want to customize things" — same layout.)
+Same as the tree above in "I want to customize things." Key directories at a glance:
 
-```
-.
-├── safe-install.sh              ★ One-command auto-install for non-technical users
-├── src/
-│   ├── cse-gen.py               CLI tool (power users: custom profiles)
-│   └── cse_lib/
-│       ├── __init__.py           Package exports
-│       ├── gamma_math.py        sRGB, PQ, and gamma transfer functions
-│       ├── edid_parser.py        Parse EDID binary → gamma, primaries, white point
-│       ├── gpu_detect.py         Detect AMD/NVIDIA/generic GPU + brightness
-│       ├── vcgt_builder.py      Compute gamma LUTs + .cal files
-│       └── icc_builder.py       Build ICC v4 profile binary
-├── profiles/icc/                7 prebuilt ICC profiles (download & apply)
-├── profiles/cal/                7 corresponding ArgyllCMS .cal LUTs
-├── tools/
-│   ├── install-profile.sh       Install .icc via colord
-│   ├── remove-profile.sh        Remove cse profiles, restore sRGB
-│   ├── dump-edid.sh             Dump EDID from display (for bug reports)
-│   ├── inspect-profile.sh       Inspect ICC header & tags
-│   └── verify.sh                Generate visual test patterns
-├── tests/                       Python test suite
-│   ├── test_basic.py            9 sanity tests
-│   └── run_all.sh               One-command test runner
-├── docs/                        Usage docs and deep-dives
-├── data/edid/                   Reference EDID dumps (per-display)
-├── scripts/                     Automation helpers
-├── output/                      Generated profiles (gitignored)
-├── .gitignore
-├── pyproject.toml
-├── LICENSE                      BSD 3-Clause — use freely, give credit, no liability
-└── README.md                    This file
-```
+| Directory | Contents |
+|---|---|
+| `src/` | All Python code: CLI tool + library modules |
+| `profiles/` | Prebuilt ICC profiles (`icc/`) and ArgyllCMS .cal LUTs (`cal/`) |
+| `tools/` | Utility scripts (install, remove, dump EDID, inspect, verify) |
+| `tests/` | Python test suite (`test_basic.py` + `run_all.sh`) |
+| `docs/` | Usage guides and technical deep-dives |
+| `data/edid/` | Reference EDID dumps for display hardware |
+| `output/` | Generated profiles (gitignored — safe-install.sh writes here) |
 
 ---
 

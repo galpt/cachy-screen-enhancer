@@ -8,6 +8,8 @@
 # If no connector is given, lists available connected displays.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # ── Sudo session keepalive ────────────────────────────────────
 sudo -v
 while true; do sudo -n true; sleep 60; kill -0 "$$" 2>/dev/null || exit; done 2>/dev/null &
@@ -33,7 +35,7 @@ fi
 
 CONNECTOR="$1"
 EDID_PATH="/sys/class/drm/$CONNECTOR/edid"
-OUTPUT_FILE="data/edid/${CONNECTOR}_$(date +%Y-%m-%d).bin"
+OUTPUT_FILE="$SCRIPT_DIR/data/edid/${CONNECTOR}_$(date +%Y-%m-%d).bin"
 
 if [ ! -f "$EDID_PATH" ]; then
     echo "✗ EDID not found for connector: $CONNECTOR"
@@ -45,7 +47,7 @@ if [ ! -f "$EDID_PATH" ]; then
     exit 1
 fi
 
-mkdir -p data/edid
+mkdir -p "$SCRIPT_DIR/data/edid"
 cat "$EDID_PATH" > "$OUTPUT_FILE"
 echo "[✓] EDID dumped to: $OUTPUT_FILE"
 echo ""
