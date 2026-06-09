@@ -156,24 +156,42 @@ if command -v dispwin &>/dev/null; then
 fi
 echo ""
 echo "[*] Installing ICC profile..."
+
+# Copy to system directory + import via colormgr (explicit registration)
 COLORD_DIR="/usr/share/color/icc/colord"
 sudo mkdir -p "$COLORD_DIR"
 sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
-sudo systemctl restart colord 2>/dev/null || true
-sleep 1
 
-PROFILE_ID=$(colormgr get-profiles 2>&1 | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+# Import the profile into colord's database explicitly
+IMPORT_OUTPUT=$(sudo colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 || true)
+PROFILE_ID=$(echo "$IMPORT_OUTPUT" | grep -oP 'icc-\w+' | head -1 || echo "")
+
+# Fallback: if import-profile fails, restart colord to scan the directory
 if [ -z "$PROFILE_ID" ]; then
-    echo "    → Copied to $COLORD_DIR/$PROFILE_NAME"
-    echo "    → Settings → Display & Monitor → Display Configuration → Color profile"
-    echo "    → Select it as your color profile"
+    sudo systemctl restart colord 2>/dev/null || true
+    sleep 2
+    PROFILE_ID=$(colormgr get-profiles 2>&1 | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+fi
+
+if [ -z "$PROFILE_ID" ]; then
+    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
+    echo "    → Add it manually from the list"
 else
-    DEVICE_ID=$(colormgr get-devices 2>&1 | grep -B1 "$CONNECTOR" | grep "Device ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
-    [ -z "$DEVICE_ID" ] && DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+    echo "    → Registered: $PROFILE_ID"
+
+    # Get or create a device to attach the profile to
+    DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+    if [ -z "$DEVICE_ID" ]; then
+        # No devices registered — create one for the detected connector
+        DEVICE_ID=$(sudo colormgr create-device "display-$CONNECTOR" "system" "display" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
+        sleep 1
+    fi
+
     if [ -n "$DEVICE_ID" ]; then
         colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
         colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
-        echo "    → Registered as default: $PROFILE_ID"
+        echo "    → Set as default for display device"
     fi
 fi
 
