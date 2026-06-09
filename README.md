@@ -271,7 +271,6 @@ Prints everything the tool detected about your system.
 │   ├── TROUBLESHOOTING.md       Common issues and fixes
 │   └── HOW_IT_WORKS.md          Technical deep-dive
 ├── data/edid/                   Reference EDID dumps
-├── scripts/                     Automation helpers
 ├── output/                      Generated files (gitignored)
 │
 ├── pyproject.toml               Python project metadata
