@@ -59,7 +59,8 @@ CONNECTOR=""
 for conn in /sys/class/drm/*/status; do
     status=$(cat "$conn" 2>/dev/null || true)
     [ "$status" = "connected" ] || continue
-    conn_name="${conn##*/}"; conn_name="${conn_name%/status}"
+    conn_path="${conn%/status}"
+    conn_name="${conn_path##*/}"
     if echo "$conn_name" | grep -q "eDP"; then
         CONNECTOR="$conn_name"; break
     fi
@@ -131,56 +132,53 @@ echo ""
 # ── Step 6: Install via colord ────────────────────────────────
 echo "[*] Installing profile via colord..."
 
-# Ensure colord is running (give it time to start if just installed)
+# Ensure colord is running
 if ! systemctl is-active --quiet colord 2>/dev/null; then
     echo "    → Starting colord service..."
-    sudo systemctl enable --now colord 2>/dev/null || true
-    # Wait for the service to become active (up to 5 seconds)
+    sudo systemctl enable --now colord
     for i in 1 2 3 4 5; do
-        if systemctl is-active --quiet colord 2>/dev/null; then
-            break
-        fi
+        if systemctl is-active --quiet colord 2>/dev/null; then break; fi
         sleep 1
     done
 fi
 
-# Retry adding the profile (up to 3 attempts with 1s delay)
+# Method A: copy profile to system directory and import via colormgr
+COLORD_DIR="/usr/share/color/icc/colord"
+sudo mkdir -p "$COLORD_DIR"
+sudo cp "$BEST_FILE" "$COLORD_DIR/$PROFILE_NAME"
+
 PROFILE_ID=""
-for attempt in 1 2 3; do
-    PROFILE_ID=$(colormgr add-profile "$BEST_FILE" 2>/dev/null | grep -oP 'icc-\w+' | head -1 || true)
-    if [ -n "$PROFILE_ID" ]; then
-        break
-    fi
-    # Try alternative method: import-profile
-    PROFILE_ID=$(colormgr import-profile "$BEST_FILE" 2>/dev/null | grep -oP 'icc-\w+' | head -1 || true)
-    if [ -n "$PROFILE_ID" ]; then
-        break
-    fi
-    sleep 1
-done
+# Method B: colormgr import-profile (handles colord database registration)
+echo "    → Registering profile with colord..."
+PROFILE_ID=$(colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
+
+# Method C: if import-profile didn't return an ID, try add-profile
+if [ -z "$PROFILE_ID" ]; then
+    PROFILE_ID=$(colormgr add-profile "$BEST_FILE" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
+fi
 
 if [ -z "$PROFILE_ID" ]; then
-    echo "    ⚠ Could not add profile via colord after multiple attempts."
-    echo "    → Try installing manually: KDE System Settings → Color Management → Add → Browse"
-    echo "    → Select: $BEST_FILE"
+    echo "    ⚠ Could not register with colord."
+    echo "    → Profile copied to $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Open KDE System Settings → Color Management → Add → Browse"
+    echo "    → Select: $COLORD_DIR/$PROFILE_NAME"
     echo ""
     echo "╔══════════════════════════════════════════════════╗"
-    echo "║  Manual install required (see path above).       ║"
+    echo "║  Profile copied to system directory.             ║"
+    echo "║  Manual step needed (see above).                 ║"
     echo "╚══════════════════════════════════════════════════╝"
     exit 0
 fi
 
-echo "    → Added profile: $PROFILE_ID"
+echo "    → Registered: $PROFILE_ID"
 
-# Get device ID for the display and set as default
-DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep -B1 "$CONNECTOR" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
-if [ -z "$DEVICE_ID" ]; then
-    DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
-fi
+# Get device ID and set as default
+DEVICE_ID=$(colormgr get-devices 2>&1 | grep -B1 "$CONNECTOR" | grep "Device ID" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+[ -z "$DEVICE_ID" ] && DEVICE_ID=$(colormgr get-devices 2>&1 | grep "Device ID" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
 
 if [ -n "$DEVICE_ID" ]; then
-    colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
-    colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
+    colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
+    colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>&1 || true
     echo "    → Set as default for $DEVICE_ID"
 fi
 
