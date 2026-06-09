@@ -136,17 +136,25 @@ echo ""
 
 # ── Step 6: Try hardware gamma correction via dispwin (ArgyllCMS) ─
 echo "[*] Applying gamma correction..."
+DISPWIN_OK="no"
 if command -v dispwin &>/dev/null; then
     if [ -f "$CAL_FILE" ]; then
-        dispwin -d 0 "$CAL_FILE" 2>&1 || echo "    ⚠ dispwin failed"
-        echo "    → Gamma correction applied via dispwin"
+        # Find the correct display index (dispwin uses 1-based indexing)
+        DISP_IDX=$(dispwin -d ? 2>&1 | grep -i 'eDP\|LVDS\|Display' | grep -oP '^\s+\d+' | head -1 | tr -d ' ' || echo "1")
+        DISP_IDX="${DISP_IDX:-1}"
+        echo "    → dispwin display index: $DISP_IDX"
+        if dispwin -d "$DISP_IDX" "$CAL_FILE" 2>&1; then
+            echo "    → Gamma correction applied via dispwin"
+            DISPWIN_OK="yes"
+        else
+            echo "    ⚠ dispwin failed. You can try:"
+            echo "      dispwin -d 1 profiles/cal/$(basename "$CAL_FILE")"
+        fi
     else
         echo "    ⚠ No .cal file at $CAL_FILE"
     fi
 fi
 echo ""
-
-# ── Step 7: Install ICC profile (for color-aware applications) ─
 echo "[*] Installing ICC profile..."
 COLORD_DIR="/usr/share/color/icc/colord"
 sudo mkdir -p "$COLORD_DIR"
@@ -173,11 +181,17 @@ echo ""
 echo "Selected profile: $PROFILE_NAME"
 echo ""
 echo "+----------------------------------------------------+"
-echo "|  Profile installed.                                |"
+echo "|  All done!                                         |"
 echo "|                                                    |"
-echo "|  For hardware gamma correction (deeper blacks):    |"
-echo "|    sudo pacman -S argyllcms                        |"
-echo "|    dispwin -d 0 profiles/cal/cse_200nits_amd.cal   |"
+if [ "$DISPWIN_OK" = "yes" ]; then
+    echo "|  ✓ Gamma correction applied                       |"
+    echo "|  ✓ ICC profile installed                          |"
+else
+    echo "|  ✓ ICC profile installed                          |"
+    echo "|                                                    |"
+    echo "|  To apply gamma correction manually:              |"
+    echo "|    dispwin -d 1 profiles/cal/$(basename "$CAL_FILE" .cal).cal  |"
+fi
 echo "|                                                    |"
 echo "|  To remove:                                        |"
 echo "|    bash tools/remove-profile.sh                    |"
