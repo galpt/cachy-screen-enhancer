@@ -108,12 +108,38 @@ done
 echo "    → Cleaning up output/..."
 rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" "$SCRIPT_DIR/output/*_no-vcgt.icc" 2>/dev/null || true
 
-# Step 6: Restart colord to complete cleanup
-echo "    → Restarting colord..."
-sudo systemctl restart colord 2>/dev/null || true
-sleep 1
+# Step 6: Restore KWin output config (revert to sRGB)
+KWIN_CONFIG="$HOME/.config/kwinoutputconfig.json"
+if [ -f "$KWIN_CONFIG" ]; then
+    python3 -c "
+import json
 
-# Step 7: Restore sRGB as default
+with open('$KWIN_CONFIG') as f:
+    config = json.load(f)
+
+changed = False
+for section in config:
+    if section.get('name') == 'outputs':
+        for output in section.get('data', []):
+            if output.get('colorProfileSource') == 'ICC' and 'cse_' in output.get('iccProfilePath', ''):
+                output['colorProfileSource'] = 'sRGB'
+                output['iccProfilePath'] = ''
+                changed = True
+
+if changed:
+    with open('$KWIN_CONFIG', 'w') as f:
+        json.dump(config, f, indent=2)
+    print('    → Restored default sRGB in KWin config')
+    import subprocess
+    subprocess.run(['dbus-send', '--session', '--dest=org.kde.KWin',
+        '--type=method_call', '/KWin', 'org.kde.KWin.reconfigure'],
+        capture_output=True)
+"
+fi
+
+# Step 7: Restart colord to complete cleanup
+
+# Step 8: Restore sRGB as default
 echo "    → Restoring sRGB as default..."
 colormgr get-devices 2>/dev/null | while IFS= read -r line; do
     if echo "$line" | grep -q "^Device ID:"; then
