@@ -48,7 +48,8 @@ sudo cp "$PROFILE" "$COLORD_SYS/$PROFILE_NAME"
 sudo chmod 644 "$COLORD_SYS/$PROFILE_NAME"
 mkdir -p "$COLORD_USER"
 cp "$PROFILE" "$COLORD_USER/$PROFILE_NAME"
-touch "$COLORD_SYS" "$COLORD_USER"
+sudo touch "$COLORD_SYS" 2>/dev/null || true
+touch "$COLORD_USER" 2>/dev/null || true
 
 # Poll for up to 5 seconds for colord to auto-register (inotify)
 for i in 1 2 3 4 5; do

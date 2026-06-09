@@ -179,7 +179,8 @@ cp "$ICC_FILE" "$COLORD_USER/$PROFILE_NAME"
 # Trigger inotify by touching the directories and waiting for colord
 # to pick up the new file. colord automatically registers profiles
 # found in its monitored directories — no import command needed.
-touch "$COLORD_SYS" "$COLORD_USER"
+sudo touch "$COLORD_SYS" 2>/dev/null || true  # system dir needs root
+touch "$COLORD_USER" 2>/dev/null || true       # user dir is writable
 for i in 1 2 3 4 5; do
     PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
     [ -n "$PROFILE_ID" ] && break
