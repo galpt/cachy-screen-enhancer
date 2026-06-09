@@ -20,6 +20,15 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" 2>/dev/null || exit; done 2>
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="$SCRIPT_DIR/profiles/icc"
 
+# ── Determine output directory ────────────────────────────────
+# When installed via PKGBUILD to /usr/share/, use user-local dir.
+# When running from git clone, use local output/ dir.
+if [[ "$SCRIPT_DIR" == /usr/share/* ]]; then
+    OUTPUT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cachy-screen-enhancer/output"
+else
+    OUTPUT_DIR="$SCRIPT_DIR/output"
+fi
+
 # ── Dependency self-bootstrap ─────────────────────────────────
 REQUIRES=("python" "colord" "argyllcms")  # python for profile generation + detection
 MISSING=()
@@ -98,7 +107,6 @@ echo ""
 
 # ── Step 3: Generate a hardware-specific profile ─────────────
 echo "[*] Generating profile for your hardware..."
-OUTPUT_DIR="$SCRIPT_DIR/output"
 mkdir -p "$OUTPUT_DIR"
 
 # Generate ICC profile with VCGT hardware correction (for KWin Wayland)
