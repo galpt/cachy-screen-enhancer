@@ -102,9 +102,9 @@ Then re-run `safe-install.sh`.
 
 The shell scripts use `pacman` for package management. If you're on a different distro:
 
-- **Fedora**: `sudo dnf install colord edid-decode`
-- **Debian/Ubuntu**: `sudo apt install colord edid-decode`
-- **openSUSE**: `sudo zypper install colord edid-decode`
+- **Fedora**: `sudo dnf install colord argyllcms`
+- **Debian/Ubuntu**: `sudo apt install colord argyllcms`
+- **openSUSE**: `sudo zypper install colord argyllcms`
 
 After installing the dependencies manually, run:
 ```bash
@@ -117,7 +117,7 @@ The hardware detection and profile installation will still work — only the aut
 The instructions assume KDE System Settings for manual install. If you use a different desktop:
 
 - **GNOME**: Settings → Color → Add profile
-- **XFCE / other**: Install `xcalib` and run: `xcalib /path/to/profile.icc`
+- **XFCE / other**: Install ArgyllCMS and run: `dispwin -d 1 /path/to/profile.cal`
 - **Sway / Hyprland (Wayland compositors)**: Use `colormgr` directly (same commands as the install script)
 
 ## I want to report a bug
