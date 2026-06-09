@@ -220,19 +220,20 @@ fi
 # If no device was created (KWin/Wayland doesn't register with colord),
 # offer to open the KDE color settings automatically
 if [ -z "${DEVICE_ID:-}" ]; then
-    echo "    → Opening color settings..."
+    echo "    → Opening display settings..."
     if command -v kcmshell6 &>/dev/null; then
-        kcmshell6 kcm_colors &>/dev/null &
+        kcmshell6 kcm_kscreen &>/dev/null &
         sleep 1
-        echo "    → KDE Display Settings opened. Go to \"Color profile\""
+        echo "    → Display Configuration opened. Click your monitor → Color profile"
         echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
     elif command -v systemsettings &>/dev/null; then
-        systemsettings kcm_colors &>/dev/null &
+        systemsettings kcm_kscreen &>/dev/null &
         sleep 1
-        echo "    → KDE Settings opened. Go to \"Color profile\""
+        echo "    → Display Configuration opened. Click your monitor → Color profile"
         echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
     else
-        echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
+        echo "    → Open System Settings → Display & Monitor → Display Configuration"
+        echo "    → Click your monitor → Color profile"
         echo "    → Select \"ICC profile\" and browse to: $COLORD_SYS/$PROFILE_NAME"
     fi
 fi
