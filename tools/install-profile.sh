@@ -40,31 +40,41 @@ fi
 PROFILE_NAME="$(basename "$PROFILE")"
 echo "[*] Installing: $PROFILE_NAME"
 
-# Copy to system profile directory and restart colord
+# Copy + import profile into colord
 COLORD_DIR="/usr/share/color/icc/colord"
 sudo mkdir -p "$COLORD_DIR"
 sudo cp "$PROFILE" "$COLORD_DIR/$PROFILE_NAME"
-sudo systemctl restart colord 2>/dev/null || true
-sleep 1
 
-# Find the registered profile ID
-PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+IMPORT_OUTPUT=$(sudo colormgr import-profile "$COLORD_DIR/$PROFILE_NAME" 2>&1 || true)
+PROFILE_ID=$(echo "$IMPORT_OUTPUT" | grep -oP 'icc-\w+' | head -1 || echo "")
+
+# Fallback: restart colord to scan
+if [ -z "$PROFILE_ID" ]; then
+    sudo systemctl restart colord 2>/dev/null || true
+    sleep 2
+    PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -B1 "$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
+fi
 
 if [ -z "$PROFILE_ID" ]; then
     echo "    → Copied to $COLORD_DIR/$PROFILE_NAME"
     echo "    → Open Settings → Display & Monitor → Display Configuration → Color profile"
-    echo "    → Select it from the list"
+    echo "    → Add it manually from the list"
     exit 0
 fi
 
 echo "    → Registered: $PROFILE_ID"
 
-# Set as default for the first display device
+# Get or create a device
 DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
+if [ -z "$DEVICE_ID" ]; then
+    DEVICE_ID=$(sudo colormgr create-device "display-${PROFILE_NAME%.*}" "system" "display" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
+    sleep 1
+fi
+
 if [ -n "$DEVICE_ID" ]; then
     colormgr device-add-profile "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
     colormgr device-make-profile-default "$DEVICE_ID" "$PROFILE_ID" 2>/dev/null || true
-    echo "    → Set as default for $DEVICE_ID"
+    echo "    → Set as default for display device"
 fi
 
 echo "[✓] Profile installed."
