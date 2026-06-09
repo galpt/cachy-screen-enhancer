@@ -13,17 +13,7 @@ sudo -v
 while true; do sudo -n true; sleep 60; kill -0 "$$" 2>/dev/null || exit; done 2>/dev/null &
 
 # ── Dependency self-bootstrap ─────────────────────────────────
-REQUIRES=("edid-decode")
-MISSING=()
-for pkg in "${REQUIRES[@]}"; do
-    if ! pacman -Qi "$pkg" &>/dev/null; then
-        MISSING+=("$pkg")
-    fi
-done
-if [ ${#MISSING[@]} -gt 0 ]; then
-    echo "[*] Installing missing packages: ${MISSING[*]}"
-    sudo pacman -S --noconfirm "${MISSING[@]}"
-fi
+# EDID parsing uses the bundled Python module — no external deps needed.
 # ────────────────────────────────────────────────────────────────
 
 # If no connector specified, list available ones
@@ -60,6 +50,25 @@ cat "$EDID_PATH" > "$OUTPUT_FILE"
 echo "[✓] EDID dumped to: $OUTPUT_FILE"
 echo ""
 
-# Decode it
+# Decode it using the bundled Python EDID parser
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "[*] EDID summary:"
-edid-decode "$EDID_PATH" 2>/dev/null || echo "  (edid-decode not available)"
+python3 -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR/src')
+from cse_lib.edid_parser import edid_summary
+try:
+    with open('$EDID_PATH', 'rb') as f:
+        edid = edid_summary(f.read())
+    print(f'  Manufacturer: {edid.get(\"manufacturer\", \"?\")}')
+    print(f'  Model:        {edid.get(\"model_code\", \"?\")}')
+    print(f'  Gamma:        {edid.get(\"gamma\", \"?\")}')
+    print(f'  Size:         {edid.get(\"width_cm\", \"?\")} cm × {edid.get(\"height_cm\", \"?\")} cm')
+    rx, ry = edid.get('red_x', 0), edid.get('red_y', 0)
+    gx, gy = edid.get('green_x', 0), edid.get('green_y', 0)
+    bx, by = edid.get('blue_x', 0), edid.get('blue_y', 0)
+    if rx != 0:
+        print(f'  Primaries:    R({rx:.3f},{ry:.3f}) G({gx:.3f},{gy:.3f}) B({bx:.3f},{by:.3f})')
+except Exception as e:
+    print(f'  (EDID parse skipped: {e})')
+" 2>&1

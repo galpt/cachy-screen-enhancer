@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="$SCRIPT_DIR/profiles/icc"
 
 # ── Dependency self-bootstrap ─────────────────────────────────
-REQUIRES=("colord" "edid-decode")
+REQUIRES=("colord")  # EDID parsing is done via the bundled Python module
 MISSING=()
 for pkg in "${REQUIRES[@]}"; do
     if ! pacman -Qi "$pkg" &>/dev/null; then
@@ -98,12 +98,22 @@ else
     EDID_PATH="/sys/class/drm/$CONNECTOR/edid"
     echo "    → Display: $CONNECTOR"
 
-    # Try to get EDID info for the report
-    if [ -f "$EDID_PATH" ] && command -v edid-decode &>/dev/null; then
-        EDID_INFO=$(edid-decode "$EDID_PATH" 2>/dev/null | head -20 || true)
-        echo "$EDID_INFO" | grep -i "manufacturer" | head -1 | sed 's/^/    → /' || true
-        echo "$EDID_INFO" | grep -i "model" | head -1 | sed 's/^/    → /' || true
-    fi
+    # Parse EDID using the bundled Python module
+    python3 -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR/src')
+from cse_lib.edid_parser import edid_summary
+try:
+    with open('$EDID_PATH', 'rb') as f:
+        edid = edid_summary(f.read())
+    mfr = edid.get('manufacturer', 'unknown')
+    gamma = edid.get('gamma', '?')
+    w = edid.get('width_cm', '?')
+    h = edid.get('height_cm', '?')
+    print(f'    → {mfr} panel | gamma {gamma} | {w}×{h} cm')
+except Exception as e:
+    print(f'    → (EDID parse skipped: {e})')
+" 2>&1 || true
 
     # ── Step 3: Detect brightness ──────────────────────────────
     echo "[*] Detecting brightness..."
