@@ -62,6 +62,7 @@ def build_icc_profile(
     edid_data: Optional[Dict[str, object]] = None,
     gamma: float = 2.2,
     include_vcgt: bool = False,
+    trc_type: int = 3,
 ) -> bytes:
     """Build a complete ICC v4 display profile.
 
@@ -153,11 +154,12 @@ def build_icc_profile(
     tag_data.append(("cprt", cprt_bytes))
 
     # wtpt (XYZType)
-    # Per ICC.1:2010, the media white point must be expressed relative
-    # to the PCS white point (D50), NOT the native display white point.
-    # Since the colorant tags (rXYZ/gXYZ/bXYZ) are already D50-adapted
-    # via the chad matrix, wtpt must also be D50.
-    wtpt_bytes = _build_xyz_type(*d50_xyz)
+    # Store the NATIVE display white point (not D50-adapted), matching
+    # the approach used by the original win11hdr-srgb-to-gamma2.2-icm
+    # project. The original ICM stores D65 native white which works
+    # correctly on KDE/CachyOS. The chad tag still provides the
+    # chromatic adaptation matrix for CMMs that want D50.
+    wtpt_bytes = _build_xyz_type(*white_xyz)
     tag_data.append(("wtpt", wtpt_bytes))
 
     # chad (S15Fixed16ArrayType — 3x3 matrix)
@@ -173,8 +175,12 @@ def build_icc_profile(
     tag_data.append(("gXYZ", _build_xyz_type(*g_xyz)))
     tag_data.append(("bXYZ", _build_xyz_type(*b_xyz)))
 
-    # rTRC, gTRC, bTRC (parametricCurveType — type 0: simple gamma)
-    trc_bytes = _build_parametric_curve(gamma)
+    # rTRC, gTRC, bTRC (parametricCurveType)
+    # Type 3 = sRGB parametric (matches the proven original ICM approach).
+    # For type 3, the gamma parameter is 2.4 (the sRGB power-law exponent).
+    # For type 0, the gamma parameter is the user's target gamma.
+    trc_gamma = 2.4 if trc_type == 3 else gamma
+    trc_bytes = _build_parametric_curve(trc_gamma, function_type=trc_type)
     tag_data.append(("rTRC", trc_bytes))
     tag_data.append(("gTRC", trc_bytes))  # identical for all channels
     tag_data.append(("bTRC", trc_bytes))
@@ -386,15 +392,44 @@ def _build_sf32_array(values: List[float]) -> bytes:
     return header + data
 
 
-def _build_parametric_curve(gamma: float) -> bytes:
-    """Build a ``parametricCurveType`` tag with type 0 (basic gamma).
+def _build_parametric_curve(gamma: float, function_type: int = 0) -> bytes:
+    """Build a ``parametricCurveType`` tag.
 
-    Type 0 formula: ``Y = X ** gamma``
+    Args:
+        gamma: Gamma exponent (for type 0: simple gamma; for type 3: the
+            2.4 exponent from the sRGB piecewise curve).
+        function_type: 0 = ``Y = X ** gamma`` (simple gamma).
+                       3 = IEC 61966-3 sRGB-like parametric curve
+                       (``Y = (A*X + B)**Gamma + C`` for ``X >= D``,
+                       ``Y = 0.0`` for ``X < D``).
+
+    Type 3 uses the standard sRGB parameters:
+        Gamma = 2.4, A = 1/1.055, B = 0.055/1.055, C = 0.0, D = 0.0
+    (This is the "no linear toe" variant which matches the original
+    win11hdr-srgb-to-gamma2.2-icm project's approach.)
     """
-    header = struct.pack(">4sIHH", b"para", 0, 0, 0)
-    gamma_int = _float_to_s15fixed16(gamma)
-    params = struct.pack(">i", gamma_int)
-    return header + params
+    if function_type == 0:
+        header = struct.pack(">4sIHH", b"para", 0, 0, 0)
+        params = struct.pack(">i", _float_to_s15fixed16(gamma))
+        return header + params
+    elif function_type == 3:
+        # Type 3 (IEC 61966-3): Y = (A*X + B)^Gamma + C, for X >= D
+        #                       Y = C,                    for X < D
+        # Standard sRGB power-law portion (matches the original ICM):
+        #   Gamma = 2.4,  A = 1/1.055 ≈ 0.947867,  B = 0.055/1.055 ≈ 0.052132
+        #   C = 0.077399... (value at D),  D = 0.04045 (the sRGB breakpoint)
+        g = _float_to_s15fixed16(gamma)                    # 2.4
+        a = _float_to_s15fixed16(1.0 / 1.055)              # 0.947867
+        b = _float_to_s15fixed16(0.055 / 1.055)            # 0.052132
+        # C is the value where the power curve meets D/12.92
+        c_val = ((0.04045 + 0.055) / 1.055) ** 2.4
+        c = _float_to_s15fixed16(c_val)                    # ≈ 0.0774
+        d = _float_to_s15fixed16(0.04045)                  # sRGB breakpoint
+        header = struct.pack(">4sIHH", b"para", 0, 3, 0)
+        params = struct.pack(">5i", g, a, b, c, d)
+        return header + params
+    else:
+        raise ValueError(f"Unsupported parametric curve type: {function_type}")
 
 
 def _build_chromaticity_type(
