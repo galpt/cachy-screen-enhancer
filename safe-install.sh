@@ -109,7 +109,7 @@ BEST_FILE="$OUTPUT_DIR/cse_${WL}nits_${GPU_METHOD}.icc"
 CAL_FILE="$OUTPUT_DIR/cse_${WL}nits_${GPU_METHOD}.cal"
 
 # Also generate a .cal file (for fallback application methods)
-python3 "$SCRIPT_DIR/src/cse-gen.py" --cal-only --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR 2>&1 || true
+python3 "$SCRIPT_DIR/src/cse-gen.py" --cal-only --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR >/dev/null 2>&1 || true
 
 # If generation failed, fall back to prebuilt profiles
 if [ ! -f "$BEST_FILE" ]; then

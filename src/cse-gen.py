@@ -92,11 +92,10 @@ def build_cal(white_level, gamma, gpu_method, output_path, black_level=0.0):
         vcgt_func = build_vcgt_generic
 
     lut = vcgt_func(white_level=white_level, gamma=gamma, black_level=black_level)
-    cal_content = write_cal_file(lut, gamma=gamma, white_level=white_level)
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(cal_content)
+    write_cal_file(lut, str(output_path))
 
     return str(output_path)
 
