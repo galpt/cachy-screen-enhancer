@@ -202,10 +202,11 @@ if [ -z "$PROFILE_ID" ]; then
 else
     echo "    → Registered: $PROFILE_ID"
 
-    # Get or create a display device
+    # Get or create a display device (run colormgr as user, NOT via sudo,
+    # so D-Bus PolKit auth works with the user session)
     DEVICE_ID=$(colormgr get-devices 2>/dev/null | grep "Device ID:" | head -1 | awk '{print $NF}' | tr -d '\r' || true)
     if [ -z "$DEVICE_ID" ]; then
-        DEVICE_ID=$(sudo colormgr create-device "display-$CONNECTOR" "system" "display" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
+        DEVICE_ID=$(colormgr create-device "display-$CONNECTOR" "temp" "display" 2>&1 | grep -oP 'icc-\w+' | head -1 || true)
         sleep 1
     fi
 

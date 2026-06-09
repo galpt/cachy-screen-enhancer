@@ -61,8 +61,28 @@ for line in out.split('\n'):
         parts = line.split()
         if parts:
             did = parts[-1].strip()
+            # Try without sudo first (user-owned device), then with sudo
+            subprocess.run(['colormgr', 'delete-device', did], capture_output=True)
             subprocess.run(['sudo', 'colormgr', 'delete-device', did], capture_output=True)
             print(f'      Removed device: {did}')
+" 2>&1 || true
+
+# Also check for any display-eDP device
+python3 -c "
+import subprocess
+out = subprocess.run(['colormgr', 'get-devices'], capture_output=True, text=True).stdout
+for line in out.split('\n'):
+    if 'display-eDP' in line.lower():
+        parts = line.split()
+        if parts:
+            did = parts[-1].strip()
+            # Remove profiles from the device before deleting it
+            for pid_line in subprocess.run(['colormgr', 'get-device', did],
+                capture_output=True, text=True).stdout.split('\n'):
+                if 'Profile:' in pid_line:
+                    pid = pid_line.split()[-1].strip()
+                    subprocess.run(['colormgr', 'device-remove-profile', did, pid], capture_output=True)
+            print(f'      Cleaned device: {did} (profile references removed)')
 " 2>&1 || true
 
 # Step 3: Clear the GPU gamma LUT (reverse of dispwin load)
