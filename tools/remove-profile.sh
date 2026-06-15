@@ -110,7 +110,7 @@ echo "    → Resetting ICC profile via kscreen-doctor..."
 if command -v kscreen-doctor &>/dev/null; then
     # Reset to no custom ICC profile
     # Reset to no custom ICC profile
-    kscreen-doctor "output.eDP-1.iccprofile." 2>/dev/null || true
+    timeout 10 kscreen-doctor "output.eDP-1.iccprofile." 2>/dev/null || true
 fi
 
 # Step 7: Restart colord to complete cleanup

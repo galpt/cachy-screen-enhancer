@@ -198,8 +198,8 @@ fi
 KWIN_CONNECTOR="${CONNECTOR#card*-}"
 echo "    → Setting ICC profile via kscreen-doctor..."
 if command -v kscreen-doctor &>/dev/null; then
-    kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile.$COLORD_DIR/$PROFILE_NAME" 2>&1 || \
-    echo "    ⚠ kscreen-doctor failed"
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile.$COLORD_DIR/$PROFILE_NAME" 2>&1 || \
+    echo "    ⚠ kscreen-doctor failed (timed out or errored)"
     echo "    → ICC profile set for $KWIN_CONNECTOR"
 else
     echo "    → Open System Settings → Display & Monitor → Display Configuration"
