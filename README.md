@@ -10,7 +10,7 @@ Ever notice how your laptop screen looks kinda... *washed out*? The colors are t
 
 Yeah, that's not your eyes playing tricks.
 
-The thing is, your screen expects colors to follow a certain curve — it's called **gamma 2.2**, and it's been the standard for computer displays for like forever. But most Linux desktops (including KDE) send colors using a slightly different curve called **sRGB**. It's not *broken*, but it makes everything look a bit lighter than it should be, especially in darker areas.
+The thing is, your screen expects colors to follow a certain curve — it's called **gamma 2.2**, and it's been the standard for computer displays for like forever. But most apps and content (web browsers, images, games) are designed for a slightly different curve called **sRGB**. KWin (KDE's compositor) assumes the display expects gamma 2.2 and composites accordingly — which means sRGB-encoded content ends up with slightly wrong brightness in darker areas. It's not *broken*, but it's not quite right either.
 
 This project fixes that. It creates a color profile that:
 - Tells color-aware apps (browsers, editors, media players) about your screen's color response
@@ -158,9 +158,9 @@ Okay, here's the non-boring explanation.
 
 Your screen has a natural "curve" for how bright each pixel should be. Think of it like a volume knob, but for light. Most laptop screens expect **gamma 2.2** — it's been the standard since CRTs were a thing.
 
-But your desktop environment (KDE) sends colors using a slightly different curve called **sRGB**. The sRGB curve is very similar to gamma 2.2, except in the dark areas — where it makes things *lighter*. That's the "washed out" look people talk about.
+But most content (web pages, photos, games) is encoded using a curve called **sRGB**. KWin composites these values assuming the display expects gamma 2.2, which is close but not identical — the slight mismatch makes near-black areas look a bit off.
 
-The ICC profile you just installed simply tells your graphics card: **"When you're sending colors to this screen, convert the sRGB curve to gamma 2.2."**
+The gamma LUT we apply via dispwin tells your graphics card: **"When you're sending colors to this screen, convert sRGB-encoded values to gamma 2.2."** This compensates for the mismatch at the hardware level.
 
 That's it. One conversion. It doesn't change the color *balance* (red/green/blue stays the same), it doesn't add fake contrast, it doesn't mess with your wallpaper or theme. It just fixes the math so the signal matches what the screen expects.
 
