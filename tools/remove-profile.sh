@@ -105,12 +105,24 @@ done
 echo "    → Cleaning up output/..."
 rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" "$SCRIPT_DIR/output/*_no-vcgt.icc" 2>/dev/null || true
 
-# Step 6: Reset ICC profile via kscreen-doctor
+# Step 6: Detect display connector and reset ICC profile via kscreen-doctor
+KWIN_CONNECTOR=""
+for conn in /sys/class/drm/*/status; do
+    status=$(cat "$conn" 2>/dev/null || true)
+    [ "$status" = "connected" ] || continue
+    conn_path="${conn%/status}"
+    conn_name="${conn_path##*/}"
+    if echo "$conn_name" | grep -q "eDP"; then
+        KWIN_CONNECTOR="${conn_name#card*-}"; break
+    fi
+    [ -z "$KWIN_CONNECTOR" ] && KWIN_CONNECTOR="${conn_name#card*-}"
+done
+
 echo "    → Resetting ICC profile via kscreen-doctor..."
-if command -v kscreen-doctor &>/dev/null; then
+if command -v kscreen-doctor &>/dev/null && [ -n "$KWIN_CONNECTOR" ]; then
     # Clear custom ICC path and switch back to sRGB source
-    timeout 10 kscreen-doctor "output.eDP-1.iccprofile." 2>/dev/null || true
-    timeout 10 kscreen-doctor "output.eDP-1.colorProfileSource.sRGB" 2>/dev/null || true
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile." 2>/dev/null || true
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorProfileSource.sRGB" 2>/dev/null || true
 fi
 
 # Step 7: Restart colord to complete cleanup
