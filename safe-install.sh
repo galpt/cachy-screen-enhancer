@@ -199,12 +199,14 @@ KWIN_CONNECTOR="${CONNECTOR#card*-}"
 echo "    → Setting ICC profile via kscreen-doctor..."
 if command -v kscreen-doctor &>/dev/null; then
     timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile.$COLORD_DIR/$PROFILE_NAME" 2>&1 || \
-    echo "    ⚠ kscreen-doctor failed (timed out or errored)"
-    echo "    → ICC profile set for $KWIN_CONNECTOR"
+    echo "    ⚠ kscreen-doctor set-iccpath failed (timed out or errored)"
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorProfileSource.ICC" 2>&1 || \
+    echo "    ⚠ kscreen-doctor set-source failed (timed out or errored)"
+    echo "    → ICC profile set and activated for $KWIN_CONNECTOR"
 else
     echo "    → Open System Settings → Display & Monitor → Display Configuration"
     echo "    → Click your monitor → Color profile"
-    echo "    → Select \"ICC profile\" and browse to: $COLORD_DIR/$PROFILE_NAME"
+    echo "    → Select the profile from the list"
 fi
 
 # Also register profile if it wasn't already (inotify may not have caught it)

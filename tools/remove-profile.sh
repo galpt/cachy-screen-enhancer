@@ -108,9 +108,9 @@ rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" "$SCRIPT_DIR
 # Step 6: Reset ICC profile via kscreen-doctor
 echo "    → Resetting ICC profile via kscreen-doctor..."
 if command -v kscreen-doctor &>/dev/null; then
-    # Reset to no custom ICC profile
-    # Reset to no custom ICC profile
+    # Clear custom ICC path and switch back to sRGB source
     timeout 10 kscreen-doctor "output.eDP-1.iccprofile." 2>/dev/null || true
+    timeout 10 kscreen-doctor "output.eDP-1.colorProfileSource.sRGB" 2>/dev/null || true
 fi
 
 # Step 7: Restart colord to complete cleanup
