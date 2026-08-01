@@ -48,16 +48,17 @@ def test_pq_boundaries():
 
 
 def test_vcgt_amd():
+    """Default curve is colorimetric: exact sRGB-intended luminance."""
     lut = build_vcgt_amd(white_level=200.0, gamma=2.2)
     assert len(lut) == 256
     assert abs(lut[0]) < 1e-10  # first entry should be ~0
-    # Deep curve: max(1^2.2 - C, 0)^(1/2.2) = (1 - C)^(1/2.2) ≈ 0.9986
-    assert abs(lut[255] - 0.9986) < 1e-3
-    # Verify the deep curve mapping: max(v^2.2 - C, 0)^(1/2.2)
-    # For v=128 (mid-gray), the output should be ~0.499
-    assert abs(lut[128] - 0.4987) < 0.005, (
-        f"VCGT[128] = {lut[128]:.4f}, expected ~0.4987."
-    )
+    assert abs(lut[255] - 1.0) < 1e-4  # last entry should be ~1
+    for i in range(256):
+        v = i / 255.0
+        expected = srgb_eotf(v) ** (1.0 / 2.2)
+        assert abs(lut[i] - expected) < 1e-12, f"mismatch at {i}"
+    # Mid-gray is ~0.498
+    assert abs(lut[128] - 0.498) < 0.005
 
 
 def test_vcgt_amd_deep_curve():

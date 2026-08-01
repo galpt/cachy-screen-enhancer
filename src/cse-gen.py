@@ -35,7 +35,7 @@ MAX_LUMINANCE = 480
 LUMINANCE_STEP = 10
 
 
-def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, edid_path=None, with_vcgt=False, curve="deep"):
+def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, edid_path=None, with_vcgt=False, curve="colorimetric"):
     """Build a single ICC profile and write it to disk.
 
     Returns the path of the written file.
@@ -87,7 +87,7 @@ def build_profile(white_level, gamma, gpu_method, output_path, black_level=0.0, 
     return str(output_path)
 
 
-def build_cal(white_level, gamma, gpu_method, output_path, black_level=0.0, curve="deep"):
+def build_cal(white_level, gamma, gpu_method, output_path, black_level=0.0, curve="colorimetric"):
     """Build a single .cal file and write it to disk.
 
     Returns the path of the written file.
@@ -111,7 +111,7 @@ def build_cal(white_level, gamma, gpu_method, output_path, black_level=0.0, curv
     return str(output_path)
 
 
-def generate_all(output_dir, gpu_method, gamma, black_level, cal_only, edid_path=None, with_vcgt=False, curve="deep"):
+def generate_all(output_dir, gpu_method, gamma, black_level, cal_only, edid_path=None, with_vcgt=False, curve="colorimetric"):
     """Generate profiles for all standard luminance levels."""
     output_dir = Path(output_dir)
     results = []
@@ -184,10 +184,10 @@ def parse_args(argv=None):
         help="Black level offset (default: 0.0)",
     )
     parser.add_argument(
-        "--curve", choices=["deep", "colorimetric"], default="deep",
-        help="Tone curve for the gamma LUT (default: deep). "
-             "'deep' reproduces the ICC-pipeline look: gamma-2.2 with a "
-             "black-floor offset, deepening blacks. 'colorimetric' "
+        "--curve", choices=["deep", "colorimetric"], default="colorimetric",
+        help="Tone curve for the gamma LUT (default: colorimetric). "
+             "'deep' applies a gamma-2.2 black-floor offset that deepens "
+             "blacks (for X11 sessions using dispwin). 'colorimetric' "
              "reproduces the exact sRGB-intended luminance.",
     )
     parser.add_argument(

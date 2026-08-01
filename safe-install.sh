@@ -142,10 +142,17 @@ PROFILE_NAME="$(basename "$BEST_FILE")"
 echo "    → Profile: $PROFILE_NAME"
 echo ""
 
-# ── Step 6: Try hardware gamma correction via dispwin (ArgyllCMS) ─
-echo "[*] Applying gamma correction..."
+# ── Step 6: Apply gamma correction ─────────────────────────────
+# Session type decides the mechanism:
+#   Wayland: dispwin is X11-only and its gamma writes land in XWayland's
+#            RANDR structures, which KWin never applies — a no-op. The
+#            real path is KWin's ICC pipeline (set in step 7).
+#   X11:     dispwin writes the .cal LUT directly to the X server's
+#            gamma ramp, which genuinely affects the screen.
+SESSION_TYPE="${XDG_SESSION_TYPE:-unknown}"
+echo "[*] Applying gamma correction (session: $SESSION_TYPE)..."
 DISPWIN_OK="no"
-if command -v dispwin &>/dev/null; then
+if [ "$SESSION_TYPE" != "wayland" ] && command -v dispwin &>/dev/null; then
     if [ -f "$CAL_FILE" ]; then
         # Find the correct display index (dispwin uses 1-based indexing)
         DISP_IDX=$(dispwin -d ? 2>&1 | grep -i 'eDP\|LVDS\|Display' | grep -oP '^\s+\d+' | head -1 | tr -d ' ' || echo "1")
@@ -161,22 +168,25 @@ if command -v dispwin &>/dev/null; then
     else
         echo "    ⚠ No .cal file at $CAL_FILE"
     fi
+elif [ "$SESSION_TYPE" = "wayland" ]; then
+    echo "    → Wayland session: dispwin is a no-op here (X11-only)."
+    echo "      Using KWin's ICC pipeline instead (step 7)."
+else
+    echo "    → dispwin unavailable, using KWin's ICC pipeline instead."
 fi
 echo ""
 echo "[*] Installing ICC profile..."
 
-# Generate a VCGT-free ICC profile for colord (standard ICC display
-# description — no hardware correction tag). Gamma correction is handled
-# separately by dispwin above.
+# Generate a VCGT-free ICC profile (standard ICC display description).
+# KWin applies the profile's TRC through its color pipeline; embedding a
+# vcgt tag here would double-apply the correction.
 ICC_NO_VCGT="$OUTPUT_DIR/${PROFILE_NAME%.icc}_no-vcgt.icc"
 python3 "$SCRIPT_DIR/src/cse-gen.py" --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR --output "$ICC_NO_VCGT" >/dev/null 2>&1 || true
 ICC_FILE="${ICC_NO_VCGT}"
 [ ! -f "$ICC_FILE" ] && ICC_FILE="$BEST_FILE"
 
     # Copy ICC profile to the user-local colord directory (no sudo needed)
-    # so color-aware apps (Firefox, GIMP, Krita) can find it. This does NOT
-    # activate the profile in KWin — the gamma correction is applied at the
-    # hardware level by dispwin above, which keeps direct scanout working.
+    # so color-aware apps (Firefox, GIMP, Krita) can find it.
     COLORD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
     mkdir -p "$COLORD_DIR"
     cp "$ICC_FILE" "$COLORD_DIR/$PROFILE_NAME"
@@ -197,21 +207,37 @@ fi
 if [ -n "$PROFILE_ID" ]; then
     echo "    → Profile registered with colord: $PROFILE_ID"
 fi
-# NOTE: We intentionally do NOT set colorProfileSource.ICC via kscreen-doctor.
-# Doing so would make KWin render through a shadow buffer to apply its own
-# ICC pipeline, which disables direct scanout (video playback, games). The
-# dispwin gamma LUT above already applies the correction at the hardware
-# level, so KWin's ICC path would be redundant and slightly inaccurate.
+
+# ── Step 7: Activate the ICC profile in KWin ───────────────────
+# Set the profile path, the profile source, and the power tradeoff.
+#   colorProfileSource.ICC:   tells KWin to use the profile
+#   colorPowerTradeoff.preferEfficiency: lets KWin offload the ICC
+#     transformation to the KMS hardware color pipeline instead of a
+#     shadow buffer — which keeps direct scanout working on GPUs that
+#     support the plane color pipeline (AMD with Linux 6.13+).
+KWIN_CONNECTOR="${CONNECTOR#card*-}"
+echo "    → Activating ICC profile via kscreen-doctor..."
+if command -v kscreen-doctor &>/dev/null; then
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile.$COLORD_DIR/$PROFILE_NAME" 2>&1 || \
+    echo "    ⚠ kscreen-doctor set-iccpath failed (timed out or errored)"
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorProfileSource.ICC" 2>&1 || \
+    echo "    ⚠ kscreen-doctor set-source failed (timed out or errored)"
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorPowerTradeoff.preferEfficiency" 2>&1 || \
+    echo "    ⚠ kscreen-doctor set-tradeoff failed (timed out or errored)"
+    echo "    → ICC profile activated for $KWIN_CONNECTOR (prefer efficiency)"
+else
+    echo "    → Open System Settings → Display & Monitor → Display Configuration"
+    echo "    → Click your monitor → Color profile → select the profile"
+fi
 
 echo ""
 echo "+----------------------------------------------------+"
 echo "|  All done!                                         |"
 echo "|                                                    |"
 if [ "$DISPWIN_OK" = "yes" ]; then
-    echo "|  + Gamma correction via dispwin                    |"
+    echo "|  + Gamma correction via dispwin (X11)             |"
 else
-    echo "|  - Gamma correction NOT applied                    |"
-    echo "|    (dispwin unavailable or failed)                 |"
+    echo "|  + Gamma correction via KWin ICC pipeline         |"
 fi
 echo "|  + Profile available to color-aware apps           |"
 echo "|                                                    |"
@@ -220,9 +246,4 @@ echo "|    bash tools/remove-profile.sh                    |"
 echo "+----------------------------------------------------+"
 echo ""
 echo "Selected profile: $PROFILE_NAME"
-if [ "$DISPWIN_OK" != "yes" ]; then
-    echo ""
-    echo "Manual gamma correction (if needed):"
-    echo "  dispwin -d 1 $CAL_FILE"
-fi
 echo ""

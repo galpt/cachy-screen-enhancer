@@ -85,15 +85,36 @@ for line in out.split('\n'):
             print(f'      Cleaned device: {did} (profile references removed)')
 " 2>&1 || true
 
-# Step 3: Clear the GPU gamma LUT (reverse of dispwin load)
-echo "    → Clearing GPU gamma LUT..."
-if command -v dispwin &>/dev/null; then
+# Step 3: Deactivate ICC profile in KWin (reverse of kscreen-doctor activation)
+KWIN_CONNECTOR=""
+for conn in /sys/class/drm/*/status; do
+    status=$(cat "$conn" 2>/dev/null || true)
+    [ "$status" = "connected" ] || continue
+    conn_path="${conn%/status}"
+    conn_name="${conn_path##*/}"
+    if echo "$conn_name" | grep -q "eDP"; then
+        KWIN_CONNECTOR="${conn_name#card*-}"; break
+    fi
+    [ -z "$KWIN_CONNECTOR" ] && KWIN_CONNECTOR="${conn_name#card*-}"
+done
+echo "    → Deactivating ICC profile in KWin..."
+if command -v kscreen-doctor &>/dev/null && [ -n "$KWIN_CONNECTOR" ]; then
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorProfileSource.sRGB" 2>/dev/null || true
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorPowerTradeoff.preferAccuracy" 2>/dev/null || true
+    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile." 2>/dev/null || true
+fi
+
+# Step 4: Clear the GPU gamma LUT (X11 sessions only; dispwin is a
+# no-op on Wayland since it writes to XWayland, which KWin ignores)
+SESSION_TYPE="${XDG_SESSION_TYPE:-unknown}"
+if [ "$SESSION_TYPE" != "wayland" ] && command -v dispwin &>/dev/null; then
+    echo "    → Clearing GPU gamma LUT (X11)..."
     DISP_IDX=$(dispwin -d ? 2>&1 | grep -i 'eDP\|LVDS\|Display' | grep -oP '^\s+\d+' | head -1 | tr -d ' ' || echo "1")
     DISP_IDX="${DISP_IDX:-1}"
     dispwin -d "$DISP_IDX" -c 2>&1 || true
 fi
 
-# Step 4: Delete files from user colord directory
+# Step 5: Delete files from user colord directory
 COLORD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
 echo "    → Removing files from $COLORD_DIR..."
 find "$COLORD_DIR" -name 'cse_*.icc' -o -name 'cse_*.cal' 2>/dev/null | while read -r f; do
@@ -101,16 +122,16 @@ find "$COLORD_DIR" -name 'cse_*.icc' -o -name 'cse_*.cal' 2>/dev/null | while re
     rm -f "$f" 2>/dev/null || true
 done
 
-# Step 5: Clean up generated files in output/
+# Step 6: Clean up generated files in output/
 echo "    → Cleaning up output/..."
 rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" "$SCRIPT_DIR/output/*_no-vcgt.icc" 2>/dev/null || true
 
-# Step 6: Restart colord to complete cleanup
+# Step 7: Restart colord to complete cleanup
 echo "    → Restarting colord..."
 sudo systemctl restart colord 2>/dev/null || true
 sleep 1
 
-# Step 7: Restore sRGB as default
+# Step 8: Restore sRGB as default
 echo "    → Restoring sRGB as default..."
 colormgr get-devices 2>/dev/null | while IFS= read -r line; do
     if echo "$line" | grep -q "^Device ID:"; then

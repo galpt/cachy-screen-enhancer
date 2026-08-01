@@ -35,28 +35,33 @@ def build_vcgt_amd(
     gamma: float = 2.2,
     black_level: float = 0.0,
     native_gamma: float = 2.2,
-    curve: str = "deep",
+    curve: str = "colorimetric",
 ) -> List[float]:
     """Compute a 256-entry gamma LUT for the AMD/KMS GPU path.
 
     Two tone curves are available:
 
-    * ``"deep"`` (default): reproduces the look of the previous ICC-shader
-      pipeline as a single hardware LUT::
-
-          V_out = max(V_in^2.2 - C, 0) ^ (1 / native_gamma)
-
-      with ``C = SRGB_TRC_FLOOR``.  The display then shows
-      ``L = max(V_in^2.2 - C, 0)`` — a gamma-2.2 presentation with a
-      black-floor offset that deepens blacks (values below ``C**(1/2.2)``
-      ≈ 7% content are crushed) and slightly darkens shadows, while
-      mid-tones and highlights stay essentially unchanged.
-
-    * ``"colorimetric"`` (accurate): an end-to-end linear system — the
+    * ``"colorimetric"`` (default): an end-to-end linear system — the
       display reproduces the exact linear luminance intended by the
       sRGB-encoded content::
 
           V_out = srgbEotf(V_in) ^ (1 / native_gamma)
+
+      This is the mathematically correct curve. It is the default because
+      on Wayland the gamma LUT is only ever applied through KWin's ICC
+      pipeline (dispwin is a no-op there); the colorimetric curve is the
+      faithful reference.
+
+    * ``"deep"``: a gamma-2.2 presentation with a black-floor offset that
+      deepens blacks (values below ``C**(1/2.2)`` ≈ 7% content are
+      crushed) and slightly darkens shadows, while mid-tones and
+      highlights stay essentially unchanged::
+
+          V_out = max(V_in^2.2 - C, 0) ^ (1 / native_gamma)
+
+      with ``C = SRGB_TRC_FLOOR``. This is intended for X11 sessions
+      where dispwin applies the LUT directly to the X server's gamma
+      ramp — it reproduces the look of the previous ICC-shader pipeline.
 
     Args:
         white_level: SDR white luminance in nits (unused in AMD path).
@@ -64,7 +69,7 @@ def build_vcgt_amd(
             the actual correction is always 1/native_gamma).
         black_level: Black floor luminance in nits (unused in AMD path).
         native_gamma: Display's native gamma from EDID (default 2.2).
-        curve: ``"deep"`` (default) or ``"colorimetric"``.
+        curve: ``"colorimetric"`` (default) or ``"deep"``.
 
     Returns:
         List of 256 floats in [0, 1] representing the LUT.

@@ -54,7 +54,7 @@ Here's what happens when you run it:
 3. It figures out what GPU you have (AMD / NVIDIA / generic)
 4. It finds your display, reads its EDID, and detects your current brightness level
 5. It generates a custom ICC profile (with accurate TRC and white point) and a `.cal` gamma LUT
-6. It applies the gamma correction to your GPU via `dispwin` — this is what changes the blacks
+6. It activates the ICC profile in KWin via `kscreen-doctor` (profile path + source + "prefer efficiency" power tradeoff) — this is what changes the look of your screen
 7. It registers the ICC profile with colord so color-aware apps can use it
 
 And then you get a nice summary like this:
@@ -75,17 +75,19 @@ And then you get a nice summary like this:
   ✓ output/cse_200nits_amd.icc
     → Profile: cse_200nits_amd.icc
 
-[*] Applying gamma correction...
-    → dispwin display index: 1
-    → Gamma correction applied via dispwin
+[*] Applying gamma correction (session: wayland)...
+    → Wayland session: dispwin is a no-op here (X11-only).
+      Using KWin's ICC pipeline instead (step 7).
 
 [*] Installing ICC profile...
     → Profile registered with colord
+    → Activating ICC profile via kscreen-doctor...
+    → ICC profile activated for eDP-1 (prefer efficiency)
 
 +----------------------------------------------------+
 |  All done!                                         |
 |                                                    |
-|  + Gamma correction via dispwin                    |
+|  + Gamma correction via KWin ICC pipeline          |
 |  + Profile available to color-aware apps           |
 |                                                    |
 |  To remove:                                        |
@@ -95,7 +97,7 @@ And then you get a nice summary like this:
 Selected profile: cse_200nits_amd.icc
 ```
 
-That's it. The gamma correction is already active on your display (via dispwin, written directly to the GPU hardware LUT). If something looks off, undo everything:
+That's it. The gamma correction is applied through KWin's ICC pipeline with the "prefer efficiency" power tradeoff, which lets the GPU offload the color transform to hardware where supported — keeping direct scanout working for video and games. If something looks off, undo everything:
 
 ```bash
 bash tools/remove-profile.sh
@@ -159,11 +161,11 @@ Your screen has a natural "curve" for how bright each pixel should be. Think of 
 
 But most content (web pages, photos, games) is encoded using a curve called **sRGB**. KWin composites these values assuming the display expects gamma 2.2, which is close but not identical — the slight mismatch makes near-black areas look a bit off.
 
-The gamma LUT we apply via dispwin tells your graphics card to present content with a **gamma-2.2 curve plus a black-floor offset** — deep shadows are pulled down toward black (giving that "deeper blacks" look), while mid-tones and highlights stay essentially unchanged. The math is `max(V^2.2 − C, 0)^(1/2.2)`, where C is a small constant (~0.3% of peak luminance).
+The ICC profile we activate tells KWin to transform the composited image with the profile's tone curve before sending it to the display. Combined with the "prefer efficiency" power tradeoff, KWin applies this transform in the GPU's hardware color pipeline when possible — no extra compositing pass, so direct scanout (zero-copy video/game presentation) keeps working.
 
-That's it. One conversion at the hardware level. It doesn't change the color *balance* (red/green/blue stays the same), it doesn't add fake contrast, it doesn't mess with your wallpaper or theme.
+That's it. One conversion. It doesn't change the color *balance* (red/green/blue stays the same), it doesn't add fake contrast, it doesn't mess with your wallpaper or theme.
 
-If you want the *real* technical details (transfer functions, PQ EOTFs, parametric curves, all that fun stuff), check out `docs/HOW_IT_WORKS.md`. Bring coffee.
+> **Note for X11 users:** on X11 (Xorg) sessions, `dispwin` from ArgyllCMS applies the `.cal` gamma LUT directly to the X server — that's the path for the "deep" curve (see `cse-gen --curve deep`). On Wayland, dispwin is a no-op because it writes through XWayland, which KWin ignores; the ICC pipeline is the only real path there.
 
 ---
 
@@ -173,7 +175,7 @@ If you want the *real* technical details (transfer functions, PQ EOTFs, parametr
 
 **Colors look washed out** → Try a lower brightness profile. If you used `cse_200nits_amd.icc`, try `cse_120nits_amd.icc`.
 
-**Nothing changed at all** → Verify the gamma LUT is actually loaded: run `bash verify-gamma.sh` and check it reports "Gamma correction IS applied". If not, run `bash safe-install.sh` again. (Note: the color profile dropdown in Display Settings may show "None" — that's expected. The correction happens at the GPU hardware level via dispwin, not through KWin's compositor.)
+**Nothing changed at all** → Verify the ICC profile is actually active: run `bash verify-gamma.sh` and check it reports "ICC profile IS active". If not, run `bash safe-install.sh` again. (The verification reads KWin's state via `kscreen-doctor` — on Wayland this is the only path that truly affects the screen.)
 
 **I want to undo everything** → `bash tools/remove-profile.sh`. This restores the default sRGB profile.
 
@@ -215,7 +217,7 @@ Parameters:
 - `--gamma G`: Target gamma power (default: 2.2)
 - `--gpu-method {amd,nvidia,generic,auto}`: GPU VCGT method (default: auto)
 - `--black-level B`: Black floor compensation (default: 0.0)
-- `--curve {deep,colorimetric}`: Tone curve for the gamma LUT (default: deep — gamma-2.2 with a black-floor offset for deeper blacks; colorimetric — exact sRGB-intended luminance)
+- `--curve {deep,colorimetric}`: Tone curve for the `.cal` LUT (default: colorimetric — exact sRGB-intended luminance; deep — gamma-2.2 with black-floor offset, for X11 sessions using dispwin)
 - `--output FILE, -o FILE`: Output file path (auto-generated if not set)
 - `--output-dir DIR`: Output directory (default: ./output/)
 - `--edid PATH`: Path to EDID file for display-specific colorimetry

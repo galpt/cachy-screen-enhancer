@@ -30,9 +30,9 @@ flowchart LR
     PIXEL --> INV --> GAMMA --> OUT
 ```
 
-The **deep curve** (default) uses: `V_out = max(V_in^2.2 − C, 0) ^ (1 / native_gamma)`, with `C = SRGB_TRC_FLOOR ≈ 0.00313`. This is a gamma-2.2 presentation with a black-floor offset: deep shadows are pulled toward black (the "deeper blacks" look) while mid-tones and highlights stay essentially unchanged.
+The **colorimetric curve** (default) uses: `V_out = srgbEotf(V_in) ^ (1 / native_gamma)`. This converts sRGB-encoded input to the gamma-encoded value needed by the display, producing an end-to-end linear system — the display reproduces the exact luminance intended by the sRGB content.
 
-The **colorimetric curve** (`--curve colorimetric`) uses: `V_out = srgbEotf(V_in) ^ (1 / native_gamma)`. This converts sRGB-encoded input to the gamma-encoded value needed by the display, producing an end-to-end linear system — the display reproduces the exact luminance intended by the sRGB content.
+The **deep curve** (`--curve deep`, X11 only) uses: `V_out = max(V_in^2.2 − C, 0) ^ (1 / native_gamma)`, with `C = SRGB_TRC_FLOOR ≈ 0.00313`. This is a gamma-2.2 presentation with a black-floor offset: deep shadows are pulled toward black (the "deeper blacks" look) while mid-tones and highlights stay essentially unchanged.
 
 ## The fix: ICC profiles with VCGT
 
@@ -74,20 +74,9 @@ Each entry: `round(lut[i] × 65535)` as unsigned 16-bit big-endian.
 
 ### AMD path (shipped profiles)
 
-The AMD GPU driver (via `amdgpu` kernel module + Mesa) applies VCGT in linear space. Two tone curves are available, selected with `--curve`:
+The VCGT LUT is written to a `.cal` file for X11 sessions (via `dispwin`) and embedded in the ICC profile when `--with-vcgt` is used. Two tone curves are available, selected with `--curve`:
 
-**Deep curve (default)** — reproduces the look of the previous ICC-shader pipeline as a single hardware LUT:
-
-```python
-def vcgt_entry(v, native_gamma):
-    return max(v ** 2.2 - SRGB_TRC_FLOOR, 0.0) ** (1.0 / native_gamma)
-```
-
-where `SRGB_TRC_FLOOR = ((0.04045 + 0.055) / 1.055) ** 2.4 ≈ 0.00313`.
-
-The display then shows `L = max(v^2.2 − C, 0)`: a gamma-2.2 presentation with a black-floor offset. Content below `v ≈ C^(1/2.2) ≈ 0.073` (~7%, the first ~18 code values) is crushed to pure black, and shadows are slightly darkened; mid-tones and highlights stay essentially unchanged. This is the classic "deeper blacks" look.
-
-**Colorimetric curve** — reproduces the exact linear luminance intended by the sRGB content:
+**Colorimetric curve (default)** — reproduces the exact linear luminance intended by the sRGB content:
 
 ```python
 def vcgt_entry(v, native_gamma):
@@ -99,6 +88,17 @@ For each input value `v` (sRGB-encoded), the pipeline is:
 2. `linear ** (1 / native_gamma)` converts linear to gamma-encoded for the display
 
 The display then applies its native gamma: `L = V_out ^ native_gamma = srgbEotf(v)` — an end-to-end linear system with no crushing.
+
+**Deep curve** — a gamma-2.2 presentation with a black-floor offset, intended for X11 sessions where dispwin applies the LUT directly to the X server's gamma ramp:
+
+```python
+def vcgt_entry(v, native_gamma):
+    return max(v ** 2.2 - SRGB_TRC_FLOOR, 0.0) ** (1.0 / native_gamma)
+```
+
+where `SRGB_TRC_FLOOR = ((0.04045 + 0.055) / 1.055) ** 2.4 ≈ 0.00313`.
+
+The display then shows `L = max(v^2.2 − C, 0)`: content below `v ≈ C^(1/2.2) ≈ 0.073` (~7%, the first ~18 code values) is crushed to pure black, and shadows are slightly darkened; mid-tones and highlights stay essentially unchanged. This is the classic "deeper blacks" look.
 
 ### NVIDIA path (code complete, unvalidated)
 
@@ -178,13 +178,33 @@ dispwin -d 1 profile.cal
 
 (`-d 1` because dispwin uses 1-based display indexing. Use `dispwin -d ?` to list displays.)
 
-## Why we apply the LUT at the hardware level, not through KWin
+## Wayland vs X11: how the correction is applied
 
-The correction is applied by writing the LUT directly to the GPU's `GAMMA_LUT` hardware property via `dispwin`. We deliberately do **not** set `colorProfileSource.ICC` in KWin's compositor:
+The mechanism differs by session type:
 
-- **Direct scanout stays working.** When an ICC profile is active in KWin with the default "prefer accuracy" color power tradeoff, KWin forces every frame through a shadow buffer to run its ICC shader — which disables direct scanout for fullscreen video and games. The hardware LUT path avoids KWin's compositor entirely.
-- **The deep curve is the equivalent of the old ICC-shader pipeline.** The previous chain (KWin gamma-2.2 → ICC shader with the type-3 TRC → LUT → display) algebraically collapses to `L = max(V^2.2 − C, 0)`, which the deep curve reproduces exactly with a single hardware LUT — the same "deeper blacks" look without touching KWin.
-- **The ICC profile is still useful** — color-aware applications (browsers, photo editors) read it from the colord directory to understand the display's colorimetry. That read path does not affect KWin's compositor.
+**Wayland (KDE Plasma):** the correction goes through KWin's ICC pipeline. `safe-install.sh` sets the profile path, the `colorProfileSource.ICC` source, and — crucially — `colorPowerTradeoff.preferEfficiency`. With "prefer efficiency", KWin tries to offload the ICC transformation to the GPU's KMS hardware color pipeline (1D LUT stages) instead of a shadow buffer:
+
+```cpp
+// KWin, src/backends/drm/drm_output.cpp (tryKmsColorOffloading)
+if (usesICC) {
+    colorPipeline.addTransferFunction(...);
+    colorPipeline.add1DLUT(iccProfile->inverseTransferFunction(), ...);
+}
+m_pipeline->setCrtcColorPipeline(colorPipeline);
+if (DrmPipeline::commitPipelines(...) == Error::None) {
+    m_needsShadowBuffer = false;   // direct scanout stays working
+    return;
+}
+// fallback: shadow buffer only if hardware can't do the pipeline
+```
+
+With the default "prefer accuracy" tradeoff, KWin always uses a shadow buffer when an ICC profile is active, which disables direct scanout. "Prefer efficiency" + hardware color pipeline support (AMD with Linux 6.13+ `DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE`) avoids that — same visual result, zero-copy presentation preserved. If the hardware doesn't support the pipeline, KWin falls back to the shadow buffer automatically.
+
+**X11 (Xorg):** `dispwin` (ArgyllCMS) writes the `.cal` LUT directly to the X server's gamma ramp via XRandR (`XRRSetCrtcGamma`) — this genuinely affects the screen. The `--curve deep` option exists for this path.
+
+**Why dispwin must not be used on Wayland:** dispwin is X11-only. On a Wayland session, `$DISPLAY` points to XWayland, whose gamma callbacks are no-op stubs (`xwl_randr_crtc_set_gamma` in the X server source just returns `TRUE`). The LUT values get stored in XWayland's RANDR structures — so `dispwin -s` reads them back and reports success — but they are never applied to the actual display, because KWin composites everything itself. On Wayland the ICC pipeline is the only real path.
+
+**The ICC profile is still useful for color-aware apps** — browsers and photo editors read it from the colord directory to understand the display's colorimetry; that read path does not affect KWin's compositor.
 
 ## Color science references
 
