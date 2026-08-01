@@ -10,3 +10,5 @@ output/
 .vscode/
 .idea/
 **/__pycache__/
+build/
+dist/

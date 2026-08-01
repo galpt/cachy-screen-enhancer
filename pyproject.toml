@@ -8,16 +8,18 @@ authors = [
 license = { text = "BSD 3-Clause" }
 requires-python = ">=3.11"
 dependencies = []
-optional-dependencies = {
-    dev = ["pytest", "pytest-cov"],
-}
+optional-dependencies = { dev = ["pytest", "pytest-cov"] }
+
+[project.scripts]
+cse-gen = "cse_gen:main"
 
 [build-system]
 requires = ["setuptools>=64"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["src*"]
+where = ["src"]
+include = ["cse_lib*"]
 
 [tool.setuptools]
-script-files = ["src/cse-gen.py"]
+py-modules = ["cse_gen"]

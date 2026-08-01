@@ -7,8 +7,11 @@ names, current brightness, and a full hardware report.
 
 from __future__ import annotations
 
-import os
+import ctypes
+import fcntl
 import glob
+import os
+import struct
 from typing import Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -62,6 +65,119 @@ def detect_gpu_method() -> str:
         return "nvidia"
 
     return "generic"
+
+
+# ---------------------------------------------------------------------------
+# Plane Color Pipeline Detection
+# ---------------------------------------------------------------------------
+
+_DRM_IOCTL_SET_CLIENT_CAP = 0x4010640D
+_DRM_CLIENT_CAP_ATOMIC = 3
+_DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE = 7
+# DRM_MODE_OBJECT_PLANE magic type from drm_mode.h (planes register
+# under this type; drmModeObjectGetProperties matches it verbatim).
+_DRM_MODE_OBJECT_PLANE = 0xeeeeeeee
+
+
+def detect_plane_color_pipeline(card_name: str) -> Optional[bool]:
+    """Probe whether a DRM card exposes plane color pipelines.
+
+    Opens ``/dev/dri/<card_name>`` and asks the kernel to enable
+    ``DRM_CLIENT_CAP_ATOMIC`` and ``DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE``,
+    then checks whether any plane exposes a property literally named
+    ``COLOR_PIPELINE``.  Informational only — the install proceeds
+    regardless of the result.
+
+    Returns:
+        ``True`` if both client caps were accepted and at least one plane
+        exposes ``COLOR_PIPELINE``; ``False`` if a cap was rejected, no
+        plane exposes the property, or plane enumeration returned
+        NULL/empty; ``None`` if the probe could not run (missing device
+        node, unloadable libdrm, or any unexpected failure).
+    """
+    dev = f"/dev/dri/{card_name}"
+    if not os.path.exists(dev):
+        return None
+
+    try:
+        libdrm = ctypes.CDLL("libdrm.so.2")
+    except OSError:
+        return None
+
+    try:
+        libdrm.drmModeGetPlaneResources.argtypes = [ctypes.c_int]
+        libdrm.drmModeGetPlaneResources.restype = ctypes.c_void_p
+        libdrm.drmModeFreePlaneResources.argtypes = [ctypes.c_void_p]
+        libdrm.drmModeFreePlaneResources.restype = None
+        libdrm.drmModeObjectGetProperties.argtypes = [
+            ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32,
+        ]
+        libdrm.drmModeObjectGetProperties.restype = ctypes.c_void_p
+        libdrm.drmModeFreeObjectProperties.argtypes = [ctypes.c_void_p]
+        libdrm.drmModeFreeObjectProperties.restype = None
+        libdrm.drmModeGetProperty.argtypes = [ctypes.c_int, ctypes.c_uint32]
+        libdrm.drmModeGetProperty.restype = ctypes.c_void_p
+        libdrm.drmModeFreeProperty.argtypes = [ctypes.c_void_p]
+        libdrm.drmModeFreeProperty.restype = None
+        fd = os.open(dev, os.O_RDWR | os.O_CLOEXEC)
+    except (OSError, AttributeError):
+        return None
+
+    try:
+        # Enable client capabilities in order; if the kernel rejects
+        # either one, the driver cannot expose plane color pipelines.
+        for cap in (_DRM_CLIENT_CAP_ATOMIC, _DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE):
+            try:
+                fcntl.ioctl(fd, _DRM_IOCTL_SET_CLIENT_CAP, struct.pack("QQ", cap, 1))
+            except OSError:
+                return False
+
+        res = libdrm.drmModeGetPlaneResources(fd)
+        if not res:
+            return False
+
+        # drmModePlaneRes and drmModeObjectProperties both start with a
+        # u32 count followed by a pointer; the +8 byte offsets below assume
+        # the x86-64 (LP64) ABI — the only Arch/CachyOS target.
+        plane_count = ctypes.c_int.from_address(res).value
+        planes_ptr = ctypes.c_void_p.from_address(res + 8).value
+        if not planes_ptr:
+            _free_drm(libdrm, "drmModeFreePlaneResources", res)
+            return False
+        for i in range(plane_count):
+            plane_id = ctypes.c_uint32.from_address(planes_ptr + i * 4).value
+            props = libdrm.drmModeObjectGetProperties(
+                fd, plane_id, _DRM_MODE_OBJECT_PLANE
+            )
+            if not props:
+                continue
+            prop_count = ctypes.c_int.from_address(props).value
+            props_ptr = ctypes.c_void_p.from_address(props + 8).value
+            if not props_ptr:
+                _free_drm(libdrm, "drmModeFreeObjectProperties", props)
+                continue
+            for j in range(prop_count):
+                prop_id = ctypes.c_uint32.from_address(props_ptr + j * 4).value
+                prop = libdrm.drmModeGetProperty(fd, prop_id)
+                if not prop:
+                    continue
+                name = ctypes.string_at(prop + 8, 32).split(b"\0", 1)[0]
+                if name == b"COLOR_PIPELINE":
+                    _free_drm(libdrm, "drmModeFreeProperty", prop)
+                    _free_drm(libdrm, "drmModeFreeObjectProperties", props)
+                    _free_drm(libdrm, "drmModeFreePlaneResources", res)
+                    return True
+                _free_drm(libdrm, "drmModeFreeProperty", prop)
+            _free_drm(libdrm, "drmModeFreeObjectProperties", props)
+        _free_drm(libdrm, "drmModeFreePlaneResources", res)
+        return False
+    except Exception:
+        return None
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +310,13 @@ def hardware_report() -> Dict[str, object]:
 # ---------------------------------------------------------------------------
 # Internal Helpers
 # ---------------------------------------------------------------------------
+
+def _free_drm(libdrm: ctypes.CDLL, name: str, ptr: Optional[int]) -> None:
+    """Free a libdrm allocation, tolerating missing symbols and NULL."""
+    free_fn = getattr(libdrm, name, None)
+    if free_fn is not None and ptr:
+        free_fn(ptr)
+
 
 def _get_connected_connectors() -> List[str]:
     """Return a sorted list of connected DRM connector names.

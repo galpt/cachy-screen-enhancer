@@ -13,6 +13,7 @@ from cse_lib.gamma_math import (
 )
 from cse_lib.vcgt_builder import build_vcgt_amd, build_vcgt_nvidia, vcgt_to_icc_tag, SRGB_TRC_FLOOR
 from cse_lib.icc_builder import build_icc_profile, validate_icc_profile
+from cse_lib.gpu_detect import detect_plane_color_pipeline
 
 
 def test_srgb_eotf_boundaries():
@@ -160,6 +161,11 @@ def test_nvidia_vcgt():
 def test_validate_bad_profile():
     assert not validate_icc_profile(b"")
     assert not validate_icc_profile(b"\x00" * 128)
+
+
+def test_detect_plane_color_pipeline_missing_card():
+    """A nonexistent DRM card degrades to None without raising."""
+    assert detect_plane_color_pipeline("card999") is None
 
 
 if __name__ == "__main__":

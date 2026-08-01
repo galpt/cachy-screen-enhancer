@@ -107,6 +107,33 @@ No harm done.
 
 ---
 
+## Direct scanout / fullscreen performance
+
+With the ICC profile active, KWin can present fullscreen video and games
+straight from the GPU with no extra compositing pass — when two things are
+true:
+
+- **Linux kernel 6.19 or newer** (it adds the DRM plane color pipeline interface)
+- **A GPU whose driver exposes plane color pipelines** — AMD RDNA2+
+  (DCN 3.0+) has it, and recent NVIDIA drivers expose it too; older GPUs
+  and drivers don't
+
+If your hardware doesn't qualify, nothing breaks: colors are still corrected,
+KWin just composites fullscreen content instead of scanning it out directly.
+You'd only notice it in fullscreen video and games (a little extra latency and
+power draw). The installer tells you if your system is affected.
+
+Curious if yours works? KWin can show you:
+
+1. Open the KWin Debug Console: `qdbus org.kde.KWin /KWin org.kde.KWin.showDebugConsole` or `qdbus6`
+2. In the **Effects** tab, find **showcompositing**, and click **Load**
+3. Play a fullscreen video or game — **green** border = scanout works, **red** = composited
+4. Desktop windows and panels always show a red border — that's normal; only
+   fullscreen content can scan out directly
+5. Unload the effect when you're done (the borders are subtle, semi-transparent)
+
+---
+
 ## Make it better (the manual way)
 
 If you'd rather pick the profile yourself (or you want to understand what the numbers mean), here's how.
@@ -175,7 +202,7 @@ That's it. One conversion. It doesn't change the color *balance* (red/green/blue
 
 **Colors look washed out** → Try a lower brightness profile. If you used `cse_200nits_amd.icc`, try `cse_120nits_amd.icc`.
 
-**Nothing changed at all** → Verify the ICC profile is actually active: run `bash verify-gamma.sh` and check it reports "ICC profile IS active". If not, run `bash safe-install.sh` again. (The verification reads KWin's state via `kscreen-doctor` — on Wayland this is the only path that truly affects the screen.)
+**Nothing changed at all** → Verify the ICC profile is actually active: run `kscreen-doctor -o` and look for your profile in the output — an `ICC profile: /home/.../cse_200nits_amd.icc` line — plus `Color profile source: ICC`. If either is missing, run `bash safe-install.sh` again. (On Wayland, KWin's ICC pipeline is the only path that truly affects the screen.)
 
 **I want to undo everything** → `bash tools/remove-profile.sh`. This restores the default sRGB profile.
 
@@ -247,7 +274,7 @@ Prints everything the tool detected about your system.
 ├── safe-install.sh              ★ One-command auto-install (start here!)
 │
 ├── src/
-│   ├── cse-gen.py               CLI tool for generating profiles
+│   ├── cse_gen.py               CLI tool for generating profiles
 │   └── cse_lib/                 Core library (Python package)
 │       ├── gamma_math.py        Transfer function math (sRGB, PQ, gamma)
 │       ├── edid_parser.py       EDID binary parser
@@ -267,7 +294,7 @@ Prints everything the tool detected about your system.
 │   └── verify.sh                Generate visual test patterns
 │
 ├── tests/                       Automated test suite
-│   ├── test_basic.py            9 sanity tests
+│   ├── test_basic.py            15 sanity tests
 │   └── run_all.sh               One-command test runner
 ├── docs/                        Supplementary documentation
 │   ├── TROUBLESHOOTING.md       Common issues and fixes

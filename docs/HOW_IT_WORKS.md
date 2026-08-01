@@ -198,7 +198,7 @@ if (DrmPipeline::commitPipelines(...) == Error::None) {
 // fallback: shadow buffer only if hardware can't do the pipeline
 ```
 
-With the default "prefer accuracy" tradeoff, KWin always uses a shadow buffer when an ICC profile is active, which disables direct scanout. "Prefer efficiency" + hardware color pipeline support (AMD with Linux 6.13+ `DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE`) avoids that — same visual result, zero-copy presentation preserved. If the hardware doesn't support the pipeline, KWin falls back to the shadow buffer automatically.
+With the default "prefer accuracy" tradeoff, KWin always uses a shadow buffer when an ICC profile is active, which disables direct scanout. "Prefer efficiency" + hardware color pipeline support (AMD with Linux 6.19+ `DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE`) avoids that — same visual result, zero-copy presentation preserved. If the hardware doesn't support the pipeline, KWin falls back to the shadow buffer automatically.
 
 **X11 (Xorg):** `dispwin` (ArgyllCMS) writes the `.cal` LUT directly to the X server's gamma ramp via XRandR (`XRRSetCrtcGamma`) — this genuinely affects the screen. The `--curve deep` option exists for this path.
 

@@ -211,7 +211,7 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--with-vcgt", action="store_true",
-        help="Embed VCGT gamma LUT in ICC profile for hardware correction"
+        help="Embed VCGT gamma LUT in ICC profile for hardware correction. "
              "By default the profile describes the display without hardware correction;",
     )
 

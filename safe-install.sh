@@ -103,6 +103,38 @@ elif [ "$BRIGHTNESS_PCT" -le 88 ]; then WL=400
 else WL=480
 fi
 
+# ── Step 2c: Direct scanout capability probe (informational only) ──
+# KWin keeps direct scanout of fullscreen content while an ICC profile is
+# active only when the kernel exposes DRM_CLIENT_CAP_PLANE_COLOR_PIPELINE
+# (Linux 6.19+) AND the GPU driver exposes plane color pipelines (AMD
+# RDNA2+/DCN 3.0+ has it; support varies by GPU and driver). This is a
+# performance nicety, not a correctness requirement — the install proceeds
+# either way.
+SESSION_TYPE="${XDG_SESSION_TYPE:-unknown}"
+if [ "$SESSION_TYPE" = "wayland" ] && [ -n "$CONNECTOR" ]; then
+    CARD="${CONNECTOR%%-*}"
+    PCP_STATUS=$(python3 -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR/src')
+from cse_lib.gpu_detect import detect_plane_color_pipeline
+print(detect_plane_color_pipeline('$CARD'))
+" 2>/dev/null || echo "unknown")
+    if [ "$PCP_STATUS" = "True" ]; then
+        echo "    → Direct scanout OK — plane color pipeline available (kernel 6.19+ driver)"
+    elif [ "$PCP_STATUS" = "False" ]; then
+        echo "    ⚠ Direct scanout will be disabled while the ICC profile is active."
+        echo "      Fullscreen video and games are composited instead of being presented"
+        echo "      directly. Color correction itself still works — this only adds a"
+        echo "      little latency/power for fullscreen content."
+        echo "      Direct scanout while ICC is active needs: Linux kernel 6.19+ and a"
+        echo "      GPU driver that exposes plane color pipelines (AMD RDNA2+ has it;"
+        echo "      support varies by GPU and driver). This check reflects what your"
+        echo "      hardware actually exposes."
+        echo "      This is informational — installation continues normally."
+    fi
+fi
+# PCP_STATUS "None"/"unknown" → probe couldn't run; stay silent (no output)
+
 echo ""
 
 # ── Step 3: Generate a hardware-specific profile ─────────────
@@ -111,13 +143,13 @@ mkdir -p "$OUTPUT_DIR"
 
 # Generate ICC profile with VCGT hardware correction (for KWin Wayland)
 GEN_ARGS="--white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR --with-vcgt"
-python3 "$SCRIPT_DIR/src/cse-gen.py" $GEN_ARGS 2>&1 || true
+python3 "$SCRIPT_DIR/src/cse_gen.py" $GEN_ARGS 2>&1 || true
 
 BEST_FILE="$OUTPUT_DIR/cse_${WL}nits_${GPU_METHOD}.icc"
 CAL_FILE="$OUTPUT_DIR/cse_${WL}nits_${GPU_METHOD}.cal"
 
 # Also generate a .cal file (for fallback application methods)
-python3 "$SCRIPT_DIR/src/cse-gen.py" --cal-only --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR >/dev/null 2>&1 || true
+python3 "$SCRIPT_DIR/src/cse_gen.py" --cal-only --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR >/dev/null 2>&1 || true
 
 # If generation failed, fall back to prebuilt profiles
 if [ ! -f "$BEST_FILE" ]; then
@@ -134,7 +166,7 @@ if [ ! -f "$BEST_FILE" ]; then
 fi
 
 if [ ! -f "$BEST_FILE" ]; then
-    echo "    ✗ ERROR: No profile available. Run 'python3 src/cse-gen.py --all' to generate one."
+    echo "    ✗ ERROR: No profile available. Run 'python3 src/cse_gen.py --all' to generate one."
     exit 1
 fi
 
@@ -181,7 +213,7 @@ echo "[*] Installing ICC profile..."
 # KWin applies the profile's TRC through its color pipeline; embedding a
 # vcgt tag here would double-apply the correction.
 ICC_NO_VCGT="$OUTPUT_DIR/${PROFILE_NAME%.icc}_no-vcgt.icc"
-python3 "$SCRIPT_DIR/src/cse-gen.py" --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR --output "$ICC_NO_VCGT" >/dev/null 2>&1 || true
+python3 "$SCRIPT_DIR/src/cse_gen.py" --white-level $WL --gpu-method $GPU_METHOD --output-dir $OUTPUT_DIR --output "$ICC_NO_VCGT" >/dev/null 2>&1 || true
 ICC_FILE="${ICC_NO_VCGT}"
 [ ! -f "$ICC_FILE" ] && ICC_FILE="$BEST_FILE"
 
@@ -214,7 +246,7 @@ fi
 #   colorPowerTradeoff.preferEfficiency: lets KWin offload the ICC
 #     transformation to the KMS hardware color pipeline instead of a
 #     shadow buffer — which keeps direct scanout working on GPUs that
-#     support the plane color pipeline (AMD with Linux 6.13+).
+#     support the plane color pipeline (AMD with Linux 6.19+).
 KWIN_CONNECTOR="${CONNECTOR#card*-}"
 echo "    → Activating ICC profile via kscreen-doctor..."
 if command -v kscreen-doctor &>/dev/null; then
