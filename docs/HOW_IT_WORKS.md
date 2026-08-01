@@ -30,7 +30,9 @@ flowchart LR
     PIXEL --> INV --> GAMMA --> OUT
 ```
 
-The correction is: `V_out = srgbEotf(V_in) ^ (1 / native_gamma)`. This converts sRGB-encoded input to the gamma-encoded value needed by the display, producing an end-to-end linear system — the display reproduces the exact luminance intended by the sRGB content.
+The **deep curve** (default) uses: `V_out = max(V_in^2.2 − C, 0) ^ (1 / native_gamma)`, with `C = SRGB_TRC_FLOOR ≈ 0.00313`. This is a gamma-2.2 presentation with a black-floor offset: deep shadows are pulled toward black (the "deeper blacks" look) while mid-tones and highlights stay essentially unchanged.
+
+The **colorimetric curve** (`--curve colorimetric`) uses: `V_out = srgbEotf(V_in) ^ (1 / native_gamma)`. This converts sRGB-encoded input to the gamma-encoded value needed by the display, producing an end-to-end linear system — the display reproduces the exact luminance intended by the sRGB content.
 
 ## The fix: ICC profiles with VCGT
 
@@ -72,7 +74,20 @@ Each entry: `round(lut[i] × 65535)` as unsigned 16-bit big-endian.
 
 ### AMD path (shipped profiles)
 
-The AMD GPU driver (via `amdgpu` kernel module + Mesa) applies VCGT in linear space. The correction LUT is:
+The AMD GPU driver (via `amdgpu` kernel module + Mesa) applies VCGT in linear space. Two tone curves are available, selected with `--curve`:
+
+**Deep curve (default)** — reproduces the look of the previous ICC-shader pipeline as a single hardware LUT:
+
+```python
+def vcgt_entry(v, native_gamma):
+    return max(v ** 2.2 - SRGB_TRC_FLOOR, 0.0) ** (1.0 / native_gamma)
+```
+
+where `SRGB_TRC_FLOOR = ((0.04045 + 0.055) / 1.055) ** 2.4 ≈ 0.00313`.
+
+The display then shows `L = max(v^2.2 − C, 0)`: a gamma-2.2 presentation with a black-floor offset. Content below `v ≈ C^(1/2.2) ≈ 0.073` (~7%, the first ~18 code values) is crushed to pure black, and shadows are slightly darkened; mid-tones and highlights stay essentially unchanged. This is the classic "deeper blacks" look.
+
+**Colorimetric curve** — reproduces the exact linear luminance intended by the sRGB content:
 
 ```python
 def vcgt_entry(v, native_gamma):
@@ -83,7 +98,7 @@ For each input value `v` (sRGB-encoded), the pipeline is:
 1. `srgbEotf(v)` converts from sRGB encoding to linear luminance
 2. `linear ** (1 / native_gamma)` converts linear to gamma-encoded for the display
 
-The display then applies its native gamma: `L = V_out ^ native_gamma = srgbEotf(v)`. This means the system reproduces the exact linear luminance intended by the sRGB content — no ratio needed.
+The display then applies its native gamma: `L = V_out ^ native_gamma = srgbEotf(v)` — an end-to-end linear system with no crushing.
 
 ### NVIDIA path (code complete, unvalidated)
 
@@ -168,7 +183,7 @@ dispwin -d 1 profile.cal
 The correction is applied by writing the LUT directly to the GPU's `GAMMA_LUT` hardware property via `dispwin`. We deliberately do **not** set `colorProfileSource.ICC` in KWin's compositor:
 
 - **Direct scanout stays working.** When an ICC profile is active in KWin with the default "prefer accuracy" color power tradeoff, KWin forces every frame through a shadow buffer to run its ICC shader — which disables direct scanout for fullscreen video and games. The hardware LUT path avoids KWin's compositor entirely.
-- **The math stays exact.** KWin's ICC pipeline would re-encode composited content based on the profile's TRC, on top of the dispwin LUT and the display's native gamma — a redundant triple transform. With only the hardware LUT, the chain is a single clean correction: `V_out = srgbEotf(V_in) ^ (1 / native_gamma)`.
+- **The deep curve is the equivalent of the old ICC-shader pipeline.** The previous chain (KWin gamma-2.2 → ICC shader with the type-3 TRC → LUT → display) algebraically collapses to `L = max(V^2.2 − C, 0)`, which the deep curve reproduces exactly with a single hardware LUT — the same "deeper blacks" look without touching KWin.
 - **The ICC profile is still useful** — color-aware applications (browsers, photo editors) read it from the colord directory to understand the display's colorimetry. That read path does not affect KWin's compositor.
 
 ## Color science references

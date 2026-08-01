@@ -23,21 +23,40 @@ from .gamma_math import (
 # VCGT Builders
 # ---------------------------------------------------------------------------
 
+#: Floor constant of the ICC type-3 parametric TRC used in the shipped
+#: profiles: ``C = ((0.04045 + 0.055) / 1.055) ** 2.4``.  The "deep" curve
+#: reproduces the display-luminance behaviour of the previous ICC-shader
+#: pipeline as a single hardware LUT (see build_vcgt_amd).
+SRGB_TRC_FLOOR: float = ((0.04045 + 0.055) / 1.055) ** 2.4
+
+
 def build_vcgt_amd(
     white_level: float = 200.0,
     gamma: float = 2.2,
     black_level: float = 0.0,
     native_gamma: float = 2.2,
+    curve: str = "deep",
 ) -> List[float]:
-    """Compute a 256-entry gamma LUT for the AMD GPU path.
+    """Compute a 256-entry gamma LUT for the AMD/KMS GPU path.
 
-    The VCGT maps sRGB-encoded compositor output to gamma-encoded values
-    expected by the display.  The formula for each entry is::
+    Two tone curves are available:
 
-        V_out = srgbEotf(V_in) ^ (1 / display_native_gamma)
+    * ``"deep"`` (default): reproduces the look of the previous ICC-shader
+      pipeline as a single hardware LUT::
 
-    which produces an end-to-end linear system — the display reproduces
-    the exact linear luminance intended by the sRGB-encoded content.
+          V_out = max(V_in^2.2 - C, 0) ^ (1 / native_gamma)
+
+      with ``C = SRGB_TRC_FLOOR``.  The display then shows
+      ``L = max(V_in^2.2 - C, 0)`` — a gamma-2.2 presentation with a
+      black-floor offset that deepens blacks (values below ``C**(1/2.2)``
+      ≈ 7% content are crushed) and slightly darkens shadows, while
+      mid-tones and highlights stay essentially unchanged.
+
+    * ``"colorimetric"`` (accurate): an end-to-end linear system — the
+      display reproduces the exact linear luminance intended by the
+      sRGB-encoded content::
+
+          V_out = srgbEotf(V_in) ^ (1 / native_gamma)
 
     Args:
         white_level: SDR white luminance in nits (unused in AMD path).
@@ -45,19 +64,31 @@ def build_vcgt_amd(
             the actual correction is always 1/native_gamma).
         black_level: Black floor luminance in nits (unused in AMD path).
         native_gamma: Display's native gamma from EDID (default 2.2).
+        curve: ``"deep"`` (default) or ``"colorimetric"``.
 
     Returns:
         List of 256 floats in [0, 1] representing the LUT.
+
+    Raises:
+        ValueError: If *curve* is not ``"deep"`` or ``"colorimetric"``.
     """
+    if curve not in ("deep", "colorimetric"):
+        raise ValueError(f"curve must be 'deep' or 'colorimetric', got {curve!r}")
+
     inv_gamma = 1.0 / native_gamma
     table: List[float] = [0.0] * 256
 
     for i in range(256):
         v = i / 255.0
-        # sRGB-encoded → linear luminance
-        L_linear = srgb_eotf(v)
-        # linear → gamma-encoded for display
-        table[i] = L_linear ** inv_gamma
+        if curve == "deep":
+            # Gamma-2.2 (KWin blending space) presentation with a
+            # black-floor offset; clamps negative values to zero.
+            L_deep = v ** 2.2 - SRGB_TRC_FLOOR
+            table[i] = max(L_deep, 0.0) ** inv_gamma
+        else:
+            # sRGB-encoded → linear luminance, then re-encode for display
+            L_linear = srgb_eotf(v)
+            table[i] = L_linear ** inv_gamma
 
     return table
 

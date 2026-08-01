@@ -11,7 +11,7 @@ from cse_lib.gamma_math import (
     pure_gamma_eotf, pure_gamma_eotf_inverse,
     pq_eotf, pq_eotf_inverse,
 )
-from cse_lib.vcgt_builder import build_vcgt_amd, build_vcgt_nvidia, vcgt_to_icc_tag
+from cse_lib.vcgt_builder import build_vcgt_amd, build_vcgt_nvidia, vcgt_to_icc_tag, SRGB_TRC_FLOOR
 from cse_lib.icc_builder import build_icc_profile, validate_icc_profile
 
 
@@ -51,15 +51,50 @@ def test_vcgt_amd():
     lut = build_vcgt_amd(white_level=200.0, gamma=2.2)
     assert len(lut) == 256
     assert abs(lut[0]) < 1e-10  # first entry should be ~0
-    assert abs(lut[255] - 1.0) < 1e-4  # last entry should be ~1
-    # Verify the VCGT mapping is correct: sRGB→linear→gamma encode
-    # For v=128 (mid-gray sRGB), the correct output is srgbEotf(v)^(1/2.2)
-    # This should be ~0.498, NOT 0.737 (the old inverted result).
-    assert abs(lut[128] - 0.498) < 0.005, (
-        f"VCGT[128] = {lut[128]:.4f}, expected ~0.498. "
-        "The VCGT mapping was inverted — srgb_eotf_inverse was used "
-        "instead of srgb_eotf."
+    # Deep curve: max(1^2.2 - C, 0)^(1/2.2) = (1 - C)^(1/2.2) ≈ 0.9986
+    assert abs(lut[255] - 0.9986) < 1e-3
+    # Verify the deep curve mapping: max(v^2.2 - C, 0)^(1/2.2)
+    # For v=128 (mid-gray), the output should be ~0.499
+    assert abs(lut[128] - 0.4987) < 0.005, (
+        f"VCGT[128] = {lut[128]:.4f}, expected ~0.4987."
     )
+
+
+def test_vcgt_amd_deep_curve():
+    """Deep curve crushes shadows below v^2.2 < C to zero."""
+    lut = build_vcgt_amd(curve="deep")
+    assert abs(lut[0]) < 1e-10
+    # v = 5/255 = 0.0196; v^2.2 = 0.000188 < C -> crushed to 0
+    assert lut[5] == 0.0
+    # v = 18/255 = 0.0706; v^2.2 = 0.00226 < C -> crushed to 0
+    assert lut[18] == 0.0
+    # v = 25/255 = 0.0980; v^2.2 = 0.00607 > C -> not crushed
+    assert lut[25] > 0.05
+    # Matches the closed form for every entry
+    for i in range(256):
+        v = i / 255.0
+        expected = max(v ** 2.2 - SRGB_TRC_FLOOR, 0.0) ** (1.0 / 2.2)
+        assert abs(lut[i] - expected) < 1e-12, f"mismatch at {i}"
+
+
+def test_vcgt_amd_colorimetric_curve():
+    """Colorimetric curve reproduces exact sRGB-intended luminance."""
+    lut = build_vcgt_amd(curve="colorimetric")
+    for i in range(256):
+        v = i / 255.0
+        expected = srgb_eotf(v) ** (1.0 / 2.2)
+        assert abs(lut[i] - expected) < 1e-12, f"mismatch at {i}"
+    # Mid-gray is ~0.498 (matches the original behavior)
+    assert abs(lut[128] - 0.498) < 0.005
+
+
+def test_vcgt_amd_invalid_curve():
+    try:
+        build_vcgt_amd(curve="bogus")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for invalid curve")
 
 
 def test_vcgt_tag():

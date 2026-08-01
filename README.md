@@ -159,9 +159,9 @@ Your screen has a natural "curve" for how bright each pixel should be. Think of 
 
 But most content (web pages, photos, games) is encoded using a curve called **sRGB**. KWin composites these values assuming the display expects gamma 2.2, which is close but not identical — the slight mismatch makes near-black areas look a bit off.
 
-The gamma LUT we apply via dispwin tells your graphics card: **"When you're sending colors to this screen, convert sRGB-encoded values to gamma 2.2."** This compensates for the mismatch at the hardware level.
+The gamma LUT we apply via dispwin tells your graphics card to present content with a **gamma-2.2 curve plus a black-floor offset** — deep shadows are pulled down toward black (giving that "deeper blacks" look), while mid-tones and highlights stay essentially unchanged. The math is `max(V^2.2 − C, 0)^(1/2.2)`, where C is a small constant (~0.3% of peak luminance).
 
-That's it. One conversion. It doesn't change the color *balance* (red/green/blue stays the same), it doesn't add fake contrast, it doesn't mess with your wallpaper or theme. It just fixes the math so the signal matches what the screen expects.
+That's it. One conversion at the hardware level. It doesn't change the color *balance* (red/green/blue stays the same), it doesn't add fake contrast, it doesn't mess with your wallpaper or theme.
 
 If you want the *real* technical details (transfer functions, PQ EOTFs, parametric curves, all that fun stuff), check out `docs/HOW_IT_WORKS.md`. Bring coffee.
 
@@ -215,6 +215,7 @@ Parameters:
 - `--gamma G`: Target gamma power (default: 2.2)
 - `--gpu-method {amd,nvidia,generic,auto}`: GPU VCGT method (default: auto)
 - `--black-level B`: Black floor compensation (default: 0.0)
+- `--curve {deep,colorimetric}`: Tone curve for the gamma LUT (default: deep — gamma-2.2 with a black-floor offset for deeper blacks; colorimetric — exact sRGB-intended luminance)
 - `--output FILE, -o FILE`: Output file path (auto-generated if not set)
 - `--output-dir DIR`: Output directory (default: ./output/)
 - `--edid PATH`: Path to EDID file for display-specific colorimetry

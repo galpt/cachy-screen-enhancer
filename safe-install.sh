@@ -210,10 +210,10 @@ echo "|                                                    |"
 if [ "$DISPWIN_OK" = "yes" ]; then
     echo "|  + Gamma correction via dispwin                    |"
 else
-    echo "|  - Gamma correction NOT applied                     |"
+    echo "|  - Gamma correction NOT applied                    |"
     echo "|    (dispwin unavailable or failed)                 |"
 fi
-echo "|  + Profile available to color-aware apps            |"
+echo "|  + Profile available to color-aware apps           |"
 echo "|                                                    |"
 echo "|  To remove:                                        |"
 echo "|    bash tools/remove-profile.sh                    |"
