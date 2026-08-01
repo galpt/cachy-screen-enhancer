@@ -173,8 +173,10 @@ python3 "$SCRIPT_DIR/src/cse-gen.py" --white-level $WL --gpu-method $GPU_METHOD 
 ICC_FILE="${ICC_NO_VCGT}"
 [ ! -f "$ICC_FILE" ] && ICC_FILE="$BEST_FILE"
 
-    # Copy ICC profile to the user-local colord directory (no sudo needed).
-    # kscreen-doctor will point KWin's config to this path.
+    # Copy ICC profile to the user-local colord directory (no sudo needed)
+    # so color-aware apps (Firefox, GIMP, Krita) can find it. This does NOT
+    # activate the profile in KWin — the gamma correction is applied at the
+    # hardware level by dispwin above, which keeps direct scanout working.
     COLORD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icc/colord"
     mkdir -p "$COLORD_DIR"
     cp "$ICC_FILE" "$COLORD_DIR/$PROFILE_NAME"
@@ -192,25 +194,14 @@ if [ -z "$PROFILE_ID" ]; then
     PROFILE_ID=$(colormgr get-profiles 2>/dev/null | grep -A1 "Filename:.*$PROFILE_NAME" | grep "Profile ID:" | awk '{print $NF}' | tr -d '\r' | head -1 || true)
 fi
 
-# Set the ICC profile via kscreen-doctor (the proper KDE API for display
-# color management). This updates both KScreen's state AND KWin's config,
-# so the GUI reflects the change immediately.
-KWIN_CONNECTOR="${CONNECTOR#card*-}"
-echo "    → Setting ICC profile via kscreen-doctor..."
-if command -v kscreen-doctor &>/dev/null; then
-    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile.$COLORD_DIR/$PROFILE_NAME" 2>&1 || \
-    echo "    ⚠ kscreen-doctor set-iccpath failed (timed out or errored)"
-    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorProfileSource.ICC" 2>&1 || \
-    echo "    ⚠ kscreen-doctor set-source failed (timed out or errored)"
-    echo "    → ICC profile set and activated for $KWIN_CONNECTOR"
-else
-    echo "    → Open System Settings → Display & Monitor → Display Configuration"
-    echo "    → Click your monitor → Color profile"
-    echo "    → Select the profile from the list"
+if [ -n "$PROFILE_ID" ]; then
+    echo "    → Profile registered with colord: $PROFILE_ID"
 fi
-
-# Also register profile if it wasn't already (inotify may not have caught it)
-sudo systemctl restart colord 2>/dev/null || true
+# NOTE: We intentionally do NOT set colorProfileSource.ICC via kscreen-doctor.
+# Doing so would make KWin render through a shadow buffer to apply its own
+# ICC pipeline, which disables direct scanout (video playback, games). The
+# dispwin gamma LUT above already applies the correction at the hardware
+# level, so KWin's ICC path would be redundant and slightly inaccurate.
 
 echo ""
 echo "+----------------------------------------------------+"
@@ -218,10 +209,11 @@ echo "|  All done!                                         |"
 echo "|                                                    |"
 if [ "$DISPWIN_OK" = "yes" ]; then
     echo "|  + Gamma correction via dispwin                    |"
-    echo "|  + ICC profile installed                           |"
 else
-    echo "|  + ICC profile installed                           |"
+    echo "|  - Gamma correction NOT applied                     |"
+    echo "|    (dispwin unavailable or failed)                 |"
 fi
+echo "|  + Profile available to color-aware apps            |"
 echo "|                                                    |"
 echo "|  To remove:                                        |"
 echo "|    bash tools/remove-profile.sh                    |"

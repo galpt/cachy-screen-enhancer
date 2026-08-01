@@ -55,7 +55,7 @@ Here's what happens when you run it:
 4. It finds your display, reads its EDID, and detects your current brightness level
 5. It generates a custom ICC profile (with accurate TRC and white point) and a `.cal` gamma LUT
 6. It applies the gamma correction to your GPU via `dispwin` — this is what changes the blacks
-7. It sets the ICC profile via `kscreen-doctor` — the proper KDE API — so the GUI and KWin both use it
+7. It registers the ICC profile with colord so color-aware apps can use it
 
 And then you get a nice summary like this:
 
@@ -80,14 +80,13 @@ And then you get a nice summary like this:
     → Gamma correction applied via dispwin
 
 [*] Installing ICC profile...
-    → Setting ICC profile via kscreen-doctor...
-    → ICC profile set for eDP-1
+    → Profile registered with colord
 
 +----------------------------------------------------+
 |  All done!                                         |
 |                                                    |
 |  + Gamma correction via dispwin                    |
-|  + ICC profile installed                           |
+|  + Profile available to color-aware apps           |
 |                                                    |
 |  To remove:                                        |
 |    bash tools/remove-profile.sh                    |
@@ -96,7 +95,7 @@ And then you get a nice summary like this:
 Selected profile: cse_200nits_amd.icc
 ```
 
-That's it. The gamma correction is already active on your display (via dispwin), and the ICC profile is set via `kscreen-doctor` — the proper KDE API. If something looks off, undo everything:
+That's it. The gamma correction is already active on your display (via dispwin, written directly to the GPU hardware LUT). If something looks off, undo everything:
 
 ```bash
 bash tools/remove-profile.sh
@@ -174,7 +173,7 @@ If you want the *real* technical details (transfer functions, PQ EOTFs, parametr
 
 **Colors look washed out** → Try a lower brightness profile. If you used `cse_200nits_amd.icc`, try `cse_120nits_amd.icc`.
 
-**Nothing changed at all** → Make sure the profile is set as default in **System Settings → Display & Monitor → Display Configuration → Color profile**. Or just run `bash safe-install.sh` again.
+**Nothing changed at all** → Verify the gamma LUT is actually loaded: run `bash verify-gamma.sh` and check it reports "Gamma correction IS applied". If not, run `bash safe-install.sh` again. (Note: the color profile dropdown in Display Settings may show "None" — that's expected. The correction happens at the GPU hardware level via dispwin, not through KWin's compositor.)
 
 **I want to undo everything** → `bash tools/remove-profile.sh`. This restores the default sRGB profile.
 
@@ -305,7 +304,7 @@ This project is based on the same idea as **[win11hdr-srgb-to-gamma2.2-icm](http
 - **No manual file picking** — detects your GPU, reads your display's EDID, picks the right brightness level automatically
 - **Self-bootstrapping** — installs everything it needs (Python, colord, ArgyllCMS) without you lifting a finger
 - **Hardware-verified** — reads back the GPU gamma LUT to confirm the correction actually took effect (not just "trust the math")
-- **Works on KDE Wayland** — sets the profile via `kscreen-doctor` so the GUI shows it, not just the config file
+- **Works on KDE Wayland** — applies the correction at the GPU hardware level (no compositor interference, direct scanout keeps working for video and games)
 - **One command to undo** — `bash tools/remove-profile.sh` reverses everything
 
 ---

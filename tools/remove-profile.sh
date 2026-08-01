@@ -7,7 +7,7 @@
 #
 # Reverses everything safe-install.sh does:
 #   - Clears the GPU gamma LUT (dispwin -c)
-#   - Deletes ICC/cal files from /usr/share/color/icc/colord/
+#   - Deletes ICC/cal files from the user colord directory
 #   - Removes profiles from colord's database
 #   - Restores sRGB as default for all display devices
 #   - Cleans up generated files in output/
@@ -105,29 +105,12 @@ done
 echo "    → Cleaning up output/..."
 rm -f "$SCRIPT_DIR/output/cse_*.icc" "$SCRIPT_DIR/output/cse_*.cal" "$SCRIPT_DIR/output/*_no-vcgt.icc" 2>/dev/null || true
 
-# Step 6: Detect display connector and reset ICC profile via kscreen-doctor
-KWIN_CONNECTOR=""
-for conn in /sys/class/drm/*/status; do
-    status=$(cat "$conn" 2>/dev/null || true)
-    [ "$status" = "connected" ] || continue
-    conn_path="${conn%/status}"
-    conn_name="${conn_path##*/}"
-    if echo "$conn_name" | grep -q "eDP"; then
-        KWIN_CONNECTOR="${conn_name#card*-}"; break
-    fi
-    [ -z "$KWIN_CONNECTOR" ] && KWIN_CONNECTOR="${conn_name#card*-}"
-done
+# Step 6: Restart colord to complete cleanup
+echo "    → Restarting colord..."
+sudo systemctl restart colord 2>/dev/null || true
+sleep 1
 
-echo "    → Resetting ICC profile via kscreen-doctor..."
-if command -v kscreen-doctor &>/dev/null && [ -n "$KWIN_CONNECTOR" ]; then
-    # Clear custom ICC path and switch back to sRGB source
-    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.iccprofile." 2>/dev/null || true
-    timeout 10 kscreen-doctor "output.$KWIN_CONNECTOR.colorProfileSource.sRGB" 2>/dev/null || true
-fi
-
-# Step 7: Restart colord to complete cleanup
-
-# Step 8: Restore sRGB as default
+# Step 7: Restore sRGB as default
 echo "    → Restoring sRGB as default..."
 colormgr get-devices 2>/dev/null | while IFS= read -r line; do
     if echo "$line" | grep -q "^Device ID:"; then

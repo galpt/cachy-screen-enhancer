@@ -158,8 +158,18 @@ END_DATA
 The 1024-entry LUT is linearly interpolated from the 256-entry VCGT. Apply it with:
 
 ```bash
-dispwin -d 0 profile.cal
+dispwin -d 1 profile.cal
 ```
+
+(`-d 1` because dispwin uses 1-based display indexing. Use `dispwin -d ?` to list displays.)
+
+## Why we apply the LUT at the hardware level, not through KWin
+
+The correction is applied by writing the LUT directly to the GPU's `GAMMA_LUT` hardware property via `dispwin`. We deliberately do **not** set `colorProfileSource.ICC` in KWin's compositor:
+
+- **Direct scanout stays working.** When an ICC profile is active in KWin with the default "prefer accuracy" color power tradeoff, KWin forces every frame through a shadow buffer to run its ICC shader — which disables direct scanout for fullscreen video and games. The hardware LUT path avoids KWin's compositor entirely.
+- **The math stays exact.** KWin's ICC pipeline would re-encode composited content based on the profile's TRC, on top of the dispwin LUT and the display's native gamma — a redundant triple transform. With only the hardware LUT, the chain is a single clean correction: `V_out = srgbEotf(V_in) ^ (1 / native_gamma)`.
+- **The ICC profile is still useful** — color-aware applications (browsers, photo editors) read it from the colord directory to understand the display's colorimetry. That read path does not affect KWin's compositor.
 
 ## Color science references
 
