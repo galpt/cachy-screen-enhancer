@@ -235,9 +235,9 @@ echo "+----------------------------------------------------+"
 echo "|  All done!                                         |"
 echo "|                                                    |"
 if [ "$DISPWIN_OK" = "yes" ]; then
-    echo "|  + Gamma correction via dispwin (X11)             |"
+    echo "|  + Gamma correction via dispwin (X11)              |"
 else
-    echo "|  + Gamma correction via KWin ICC pipeline         |"
+    echo "|  + Gamma correction via KWin ICC pipeline          |"
 fi
 echo "|  + Profile available to color-aware apps           |"
 echo "|                                                    |"
