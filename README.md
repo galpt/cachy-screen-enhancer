@@ -123,14 +123,21 @@ KWin just composites fullscreen content instead of scanning it out directly.
 You'd only notice it in fullscreen video and games (a little extra latency and
 power draw). The installer tells you if your system is affected.
 
-Curious if yours works? KWin can show you:
+Curious if yours works? Check it from the terminal — run the first command,
+play a fullscreen video or game, look at the border, then run the second:
 
-1. Open the KWin Debug Console: `qdbus org.kde.KWin /KWin org.kde.KWin.showDebugConsole` or `qdbus6`
-2. In the **Effects** tab, find **showcompositing**, and click **Load**
-3. Play a fullscreen video or game — **green** border = scanout works, **red** = composited
-4. Desktop windows and panels always show a red border — that's normal; only
-   fullscreen content can scan out directly
-5. Unload the effect when you're done (the borders are subtle, semi-transparent)
+```bash
+dbus-send --session --dest=org.kde.KWin /Effects \
+    org.kde.kwin.Effects.loadEffect string:showcompositing
+dbus-send --session --dest=org.kde.KWin /Effects \
+    org.kde.kwin.Effects.unloadEffect string:showcompositing
+```
+
+- **green** border = direct scanout works, **red** = composited
+- Desktop windows and panels always show a red border — that's normal; only
+  fullscreen content can scan out directly
+- The borders are subtle and semi-transparent; if `dbus-send` is missing,
+  `qdbus6` (qt6-tools) accepts the same calls
 
 ---
 
