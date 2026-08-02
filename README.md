@@ -124,7 +124,7 @@ You'd only notice it in fullscreen video and games (a little extra latency and
 power draw). The installer tells you if your system is affected.
 
 Curious if yours works? Check it from the terminal — run the first command,
-play a fullscreen video or game, look at the border, then run the second:
+play a fullscreen video, look at the border, then run the second:
 
 ```bash
 dbus-send --session --dest=org.kde.KWin /Effects \
@@ -133,9 +133,14 @@ dbus-send --session --dest=org.kde.KWin /Effects \
     org.kde.kwin.Effects.unloadEffect string:showcompositing
 ```
 
-- **green** border = direct scanout works, **red** = composited
+- **No border on the fullscreen video** = scanout is working (KWin skips
+  rendering it and the GPU presents it directly)
+- **Red border on the video** = it's being composited
 - Desktop windows and panels always show a red border — that's normal; only
   fullscreen content can scan out directly
+- Games often show a red border even when scanout is available — most game
+  surfaces have an alpha channel, so KWin composites them. Use a fullscreen
+  video to test instead.
 - The borders are subtle and semi-transparent; if `dbus-send` is missing,
   `qdbus6` (qt6-tools) accepts the same calls
 
